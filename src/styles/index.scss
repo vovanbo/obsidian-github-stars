@@ -1,0 +1,82 @@
+@keyframes blinking {
+  0% {
+    opacity: 0.2;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.2;
+  }
+}
+
+
+.plugin-obsidian-github-stars {
+  padding: 0 var(--size-2-2);
+
+  .logo {
+    height: var(--icon-s);
+    width: var(--icon-s);
+  }
+
+  .stats {
+    display: inline-flex;
+    gap: var(--size-2-2);
+    margin-left: var(--size-2-2);
+
+    .starred-count-icon {
+      color: var(--color-yellow);
+
+      .svg-icon {
+        width: 0.75rem;
+        height: 0.75rem;
+      }
+    }
+
+    .unstarred-count {
+      font-weight: bold;
+      color: var(--color-red);
+    }
+
+    .unstarred-count-icon {
+      color: var(--color-red);
+
+      .svg-icon {
+        width: 0.75rem;
+        height: 0.75rem;
+      }
+    }
+  }
+
+  .action {
+    display: inline-flex;
+    gap: var(--size-2-2);
+    margin-left: var(--size-2-2);
+
+    &.in-progress {
+      animation: blinking 2s infinite;
+    }
+
+    &.done {
+      color: var(--color-green);
+    }
+
+    &.failed {
+      color: var(--color-red);
+    }
+
+    .action-icon {
+      .svg-icon {
+        width: 0.75rem;
+        height: 0.75rem;
+      }
+    }
+
+    // .action-state {
+      // margin-left: var(--size-4-1);
+    // }
+  }
+
+}
