@@ -46,7 +46,7 @@ footer = """
 trim = true
 # postprocessors
 postprocessors = [
-    { pattern = '\$REPO', replace = "https://github.com/cocogitto/cocogitto" }, # replace repository URL
+    { pattern = '\$REPO', replace = "https://github.com/vovanbo/obsidian-github-stars" },
 ]
 
 [git]
@@ -71,12 +71,19 @@ commit_parsers = [
     { message = "^revert", group = "Revert" },
     { message = "^test", group = "Tests" },
     { message = "^chore\\(version\\):", skip = true },
-    { message = "^chore", group = "Miscellaneous Chores" },
+    { message = "^chore|^ci", group = "Miscellaneous" },
     { body = ".*security", group = "Security" },
 ]
 # filter out the commits that are not matched by commit parsers
 filter_commits = false
 # sort the tags topologically
 topo_order = false
+# regex for matching git tags
+tag_pattern = "v[0-9].*"
 # sort the commits inside sections by oldest/newest order
-sort_commits = "oldest"
+sort_commits = "newest"
+
+[bump]
+features_always_bump_minor = true
+breaking_always_bump_major = true
+initial_tag = "0.1.0"
