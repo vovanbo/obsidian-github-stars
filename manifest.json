@@ -1,0 +1,11 @@
+{
+    "id": "obsidian-github-stars",
+    "name": "GitHub Stars",
+    "version": "0.1.0",
+    "minAppVersion": "0.15.0",
+    "description": "Fetch your GitHub stars and create documents in your Obsidian vault.",
+    "author": "Vladimir Bolshakov",
+    "authorUrl": "https://github.com/vovanbo",
+    "fundingUrl": "https://github.com/vovanbo",
+    "isDesktopOnly": true
+}
