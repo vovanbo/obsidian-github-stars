@@ -1,6 +1,13 @@
 # Changelog
 
 ---
+## [0.1.1](https://github.com/vovanbo/obsidian-github-stars/compare/0.1.0..0.1.1) - 2025-02-23
+
+### Miscellaneous
+
+- Try to fix CI workflow - ([6d7e0c2](https://github.com/vovanbo/obsidian-github-stars/commit/6d7e0c2a8a88b5b6d4681e9d336365befaec7e77)) - Vladimir Bolshakov
+
+---
 ## [0.1.0] - 2025-02-23
 
 ### Bug Fixes
