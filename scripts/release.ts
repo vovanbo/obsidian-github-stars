@@ -16,6 +16,7 @@ import {
 
 function checkVersionIsNotPublished(version: string) {
     console.log(`Check is version ${version} exists…`);
+
     return ResultAsync.fromPromise(
         $`git tag -l "${version}"`.text(),
         (error) => {
@@ -32,6 +33,7 @@ function checkVersionIsNotPublished(version: string) {
 
 function generateChangeLog(version: string) {
     console.log(`Generate ${changeLogFile}`);
+
     return ResultAsync.fromPromise(
         $`git cliff --tag ${version} -o "${changeLogFile}"`,
         (error) => {
@@ -42,6 +44,8 @@ function generateChangeLog(version: string) {
 }
 
 function addFiles(...files: string[]) {
+    console.log(`Add files to index: ${files.join(" ")}`);
+
     return ResultAsync.fromPromise($`git add ${files.join(" ")}`, (error) => {
         console.error(`ERROR. ${error}`);
         return ReleaseError.UnableToAddFileContentsToGitIndex;
@@ -49,6 +53,8 @@ function addFiles(...files: string[]) {
 }
 
 function makeCommit(version: string) {
+    console.log("Make commit");
+
     return ResultAsync.fromPromise(
         $`git commit -m "Release ${version}"`,
         (error) => {
@@ -59,6 +65,8 @@ function makeCommit(version: string) {
 }
 
 function createGitTagOfNewVersion(version: string) {
+    console.log(`Create a tag ${version}`);
+
     return ResultAsync.fromPromise(
         $`git tag -a "${version}" -m "${version}"`,
         (error) => {
@@ -69,6 +77,9 @@ function createGitTagOfNewVersion(version: string) {
 }
 
 await readJsonFile<IPackageJson>(packageFile)
+    .andTee((metadata) =>
+        console.log(`Make release of version ${metadata.version}`),
+    )
     .andThrough((metadata) =>
         checkVersionIsNotPublished(metadata.version as string),
     )
@@ -89,6 +100,7 @@ await readJsonFile<IPackageJson>(packageFile)
         addFiles(packageFile, manifestFile, versionsFile, changeLogFile),
     )
     .andThrough((metadata) => makeCommit(metadata.version as string))
-    .andThen((metadata) =>
-        createGitTagOfNewVersion(metadata.version as string),
+    .andThen((metadata) => createGitTagOfNewVersion(metadata.version as string))
+    .andTee(() =>
+        console.log("Release is ready. Run `git push --follow-tags`"),
     );

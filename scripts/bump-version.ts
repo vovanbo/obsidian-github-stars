@@ -21,7 +21,7 @@ export function bumpPackageVersion() {
             ]),
         )
         .andThen(([newVersion, metadata]) => {
-            console.log("Bump package version.");
+            console.log(`Bump package version to ${newVersion}`);
             if (newVersion === metadata.version) {
                 console.log(
                     "New version is the same as package version. Nothing to do.",
@@ -39,6 +39,7 @@ export function bumpPackageVersion() {
                 JSON.stringify(metadata, null, 4),
             );
         })
+        .andTee(() => console.log("Done!"))
         .orElse((error) => {
             console.error(`ERROR. ${error}`);
             return err(VersionError.UnableToBumpPackageVersion);
