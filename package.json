@@ -1,10 +1,11 @@
 {
     "name": "obsidian-github-stars",
-    "version": "0.0.1",
+    "version": "0.1.0",
     "author": {
-        "name": "Planetarium Technologies"
+        "name": "Vladimir Bolshakov",
+        "url": "https://github.com/vovanbo"
     },
-    "obsidianMinAppVersion": "0.15.0",
+    "obsidianMinAppVersion": "1.0.0",
     "devDependencies": {
         "@biomejs/biome": "^1.9.4",
         "@octokit/core": "^6.1.4",
@@ -23,6 +24,7 @@
         "neverthrow": "^8.2.0",
         "normalize-url": "^8.0.1",
         "obsidian": "latest",
+        "package-json-type": "^1.0.3",
         "resolve-tspaths": "^0.8.23",
         "sql.js": "^1.12.0",
         "stylelint": "^16.14.1",
