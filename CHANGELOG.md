@@ -1,6 +1,13 @@
 # Changelog
 
 ---
+## [0.1.2](https://github.com/vovanbo/obsidian-github-stars/compare/0.1.1..0.1.2) - 2025-02-23
+
+### Miscellaneous
+
+- Fix permissions in GitHub workflow - ([abe5c44](https://github.com/vovanbo/obsidian-github-stars/commit/abe5c44b9460268b291777262121f577ca22693e)) - Vladimir Bolshakov
+
+---
 ## [0.1.1](https://github.com/vovanbo/obsidian-github-stars/compare/0.1.0..0.1.1) - 2025-02-23
 
 ### Miscellaneous
