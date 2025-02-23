@@ -26,7 +26,7 @@ export const indexPageByDaysTemplate = Handlebars.compile(
 {{#each this.[1]}}
 #### {{dateFormatFromMillis this.[0] "DDD"}}
 {{#each this.[1]}}
-- {{#if this.unstarredAt}}~~{{/if}}[[{{@root.repostioriesFolder}}/{{this.owner.login}}/{{this.name}}|{{this.name}}]] by [[{{this.owner.login}}]]{{#if this.description}}. {{this.description}}{{/if}}{{#if this.unstarredAt}}~~ *(unstarred at {{dateFormat this.unstarredAt "ff"}})*{{/if}}
+- {{#if this.unstarredAt}}~~{{/if}}[[{{@root.repostioriesFolder}}/{{this.owner.login}}/{{this.name}}|{{this.name}}]] by [{{this.owner.login}}]({{this.owner.url}}){{#if this.description}}. {{this.description}}{{/if}}{{#if this.unstarredAt}}~~ *(unstarred at {{dateFormat this.unstarredAt "ff"}})*{{/if}}
 {{/each}}
 {{/each}}
 {{/each}}
@@ -46,7 +46,7 @@ export const indexPageByLanguagesTemplate = Handlebars.compile(
 {{#each reposPerLanguage}}
 ## {{this.[0]}}
 {{#each this.[1]}}
-- {{#if this.unstarredAt}}~~{{/if}}[[{{@root.repostioriesFolder}}/{{this.owner.login}}/{{this.name}}|{{this.name}}]] by [[{{this.owner.login}}]]{{#if this.description}}. {{this.description}}{{/if}}{{#if this.unstarredAt}}~~ *(unstarred at {{dateFormat this.unstarredAt "ff"}})*{{/if}}
+- {{#if this.unstarredAt}}~~{{/if}}[[{{@root.repostioriesFolder}}/{{this.owner.login}}/{{this.name}}|{{this.name}}]] by [{{this.owner.login}}]({{this.owner.url}}){{#if this.description}}. {{this.description}}{{/if}}{{#if this.unstarredAt}}~~ *(unstarred at {{dateFormat this.unstarredAt "ff"}})*{{/if}}
 {{/each}}
 {{/each}}
 `,
