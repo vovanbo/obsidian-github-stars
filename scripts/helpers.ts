@@ -51,10 +51,13 @@ export function createFileIfNotExists(path: string, content: string) {
 }
 
 export function removeFiles(paths: string[]) {
-    return ResultAsync.fromPromise($`rm -f ${paths.join(" ")}`, (error) => {
-        console.error(`ERROR. ${error}`);
-        return FileSystemError.FileSystemError;
-    });
+    return ResultAsync.fromPromise(
+        $`rm -f ${{ raw: paths.join(" ") }}`,
+        (error) => {
+            console.error(`ERROR. ${error}`);
+            return FileSystemError.FileSystemError;
+        },
+    );
 }
 
 export function getVersionsFromPackageMetadata() {

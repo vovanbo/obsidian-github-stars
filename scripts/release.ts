@@ -46,10 +46,13 @@ function generateChangeLog(version: string) {
 function addFiles(...files: string[]) {
     console.log(`Add files to index: ${files.join(" ")}`);
 
-    return ResultAsync.fromPromise($`git add ${files.join(" ")}`, (error) => {
-        console.error(`ERROR. ${error}`);
-        return ReleaseError.UnableToAddFileContentsToGitIndex;
-    });
+    return ResultAsync.fromPromise(
+        $`git add ${{ raw: files.join(" ") }}`,
+        (error) => {
+            console.error(`ERROR. ${error}`);
+            return ReleaseError.UnableToAddFileContentsToGitIndex;
+        },
+    );
 }
 
 function makeCommit(version: string) {
