@@ -32,7 +32,7 @@ jobs:
         id: build
         run: |
           bun install
-          just ci ${{ github.ref }} ${{ env.PLUGIN_NAME }}
+          just ci ${{ github.ref_name }} ${{ env.PLUGIN_NAME }}
 
       - name: Generate a changelog
         uses: orhun/git-cliff-action@v4
