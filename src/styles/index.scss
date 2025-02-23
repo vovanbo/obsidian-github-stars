@@ -3,7 +3,11 @@
     opacity: 0.2;
   }
 
-  50% {
+ 33% {
+    opacity: 1;
+  }
+
+  66% {
     opacity: 1;
   }
 
@@ -56,7 +60,7 @@
     margin-left: var(--size-2-2);
 
     &.in-progress {
-      animation: blinking 2s infinite;
+      animation: blinking 6s infinite;
     }
 
     &.done {
@@ -73,10 +77,6 @@
         height: 0.75rem;
       }
     }
-
-    // .action-state {
-      // margin-left: var(--size-4-1);
-    // }
   }
 
 }
