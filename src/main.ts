@@ -1,14 +1,7 @@
 import Handlebars from "handlebars";
-import { Stream, set, single } from "itertools-ts";
+import { Stream, set } from "itertools-ts";
 import { DateTime } from "luxon";
-import {
-    type Result,
-    ResultAsync,
-    err,
-    errAsync,
-    ok,
-    okAsync,
-} from "neverthrow";
+import { ResultAsync, err, errAsync, ok, okAsync } from "neverthrow";
 import {
     type App,
     type DataWriteOptions,
@@ -18,30 +11,12 @@ import {
     type TFile,
     normalizePath,
 } from "obsidian";
-import {
-    PluginDatabase,
-    type PluginDatabaseError,
-    getStatsQuery,
-    insertLicensesQuery,
-    insertOwnersQuery,
-    insertRepositoriesQuery,
-    insertRepositoriesTopicsQuery,
-    insertTopicsQuery,
-    removeOrphanedLicensesQuery,
-    removeOrphanedOwnersQuery,
-    removeOrphanedTopicsQuery,
-    removeRepositoriesTopicsQuery,
-    removeUnstarredRepositoriesQuery,
-    selectRepositoriesQuery,
-    selectRepositoryTopicsQuery,
-} from "./db";
-import { PluginLock } from "./lock";
-import {
-    GithubRepositoriesService,
-    type GithubRepositoriesServiceError,
-} from "./services";
+import { PluginError } from "./errors";
+import { GithubRepositoriesService } from "./services";
 import { SettingsTab } from "./settings";
+import { SqliteDatabase } from "./sqlite";
 import { StatusBar, StatusBarAction } from "./statusBar";
+import { PluginStorage } from "./storage";
 import {
     emptyPage,
     indexPageByDaysTemplate,
@@ -49,7 +24,8 @@ import {
     indexPageByOwnersTemplate,
     repoPageTemplate,
 } from "./templates";
-import { GitHub, type Stats } from "./types";
+import type { GitHub } from "./types";
+import { PluginLock } from "./utils";
 
 interface PluginSettings {
     pageSize: number;
@@ -69,27 +45,11 @@ const DEFAULT_SETTINGS: PluginSettings = {
     indexPageByLanguagesFileName: "Stars by languages.md",
 };
 
-// TODO: Humanize description
-enum PluginError {
-    ImportFailed = "ImportFailed",
-    CreateFolderFailed = "CreateFolderFailed",
-    CreateFileFailed = "CreateFileFailed",
-    ProcessingFailed = "ProcessingFailed",
-    RemoveUnstarredRepositoriesFailed = "RemoveUnstarredRepositoriesFailed",
-    FileCanNotBeRemoved = "FileCanNotBeRemoved",
-    FileNotFound = "FileNotFound",
-}
-
-type ImportResult = Result<
-    void,
-    GithubRepositoriesServiceError | PluginError | PluginDatabaseError
->;
-
 export default class GithubStarsPlugin extends Plugin {
-    settings: PluginSettings = DEFAULT_SETTINGS;
     pluginFolder: string;
+    storage: PluginStorage;
+    settings: PluginSettings = DEFAULT_SETTINGS;
     private lock = new PluginLock();
-    private db: PluginDatabase;
     private placeHolderRegex =
         /(<!-- GITHUB-STARS-START -->\s)([\s\S]*?)(\s<!-- GITHUB-STARS-END -->)/gm;
     private statusBar?: StatusBar;
@@ -99,10 +59,13 @@ export default class GithubStarsPlugin extends Plugin {
         this.pluginFolder = normalizePath(
             `${this.app.vault.configDir}/plugins/${this.manifest.id}`,
         );
-        this.db = new PluginDatabase(
-            `${this.pluginFolder}/stars.db`,
-            this.app.vault.adapter,
+        this.storage = new PluginStorage(
+            new SqliteDatabase(this.app.vault.adapter),
         );
+    }
+
+    private get dbFolder() {
+        return `${this.settings.destinationFolder}/db`;
     }
 
     private get repostioriesFolder() {
@@ -114,10 +77,14 @@ export default class GithubStarsPlugin extends Plugin {
         this.addSettingTab(new SettingsTab(this.app, this));
         this.registerHandlebarsHelpers();
 
-        const dbInitResult = await this.db.init();
-        if (dbInitResult.isErr()) {
-            console.error(dbInitResult.error);
-            new Notice("ERROR. Database initialization is failed!");
+        await this.getOrCreateFolder(this.dbFolder);
+        const openStorageResult = await this.storage.init(
+            this.dbFolder,
+            "stars.db",
+        );
+        if (openStorageResult.isErr()) {
+            console.error(openStorageResult.error);
+            new Notice(`ERROR. ${openStorageResult.error}`);
             return;
         }
 
@@ -129,8 +96,8 @@ export default class GithubStarsPlugin extends Plugin {
             name: "Synchronize your starred repositories",
             callback: async () => {
                 return this.lock.run(async () => {
-                    return await (await this.importDataToDb())
-                        .andThen(() => this.getRepositoriesFromDb())
+                    return await (await this.importDataToStorage())
+                        .andThen(() => this.storage.getRepositories())
                         .asyncAndThen((repos) => this.createPages(repos))
                         .andTee(() => this.updateStats())
                         .orElse((error) => {
@@ -146,7 +113,8 @@ export default class GithubStarsPlugin extends Plugin {
             name: "Create pages",
             callback: async () => {
                 return this.lock.run(async () => {
-                    return await this.getRepositoriesFromDb()
+                    return await this.storage
+                        .getRepositories()
                         .asyncAndThen((repos) => this.createPages(repos))
                         .orElse((error) => {
                             console.error(error);
@@ -162,7 +130,7 @@ export default class GithubStarsPlugin extends Plugin {
             callback: async () => {
                 return this.lock.run(async () => {
                     const removeResult = await (
-                        await this.removeUnstarredRepositoresFromDb()
+                        await this.storage.removeUnstarredRepositores()
                     )
                         .asyncAndThen((removedRepos) => {
                             // TODO: Add setting to handle removal of unstarred files
@@ -183,7 +151,8 @@ export default class GithubStarsPlugin extends Plugin {
                             return err(error);
                         });
                     if (removeResult.isOk() && removeResult.value.length) {
-                        return await this.getRepositoriesFromDb()
+                        return await this.storage
+                            .getRepositories()
                             .asyncAndThen((repos) => this.createPages(repos))
                             .orElse((error) => {
                                 console.error(error);
@@ -198,7 +167,7 @@ export default class GithubStarsPlugin extends Plugin {
 
     override async onunload(): Promise<void> {
         this.unregisterHandlebarsHelpers();
-        this.db.close();
+        this.storage.close();
     }
 
     async loadSettings() {
@@ -315,157 +284,6 @@ export default class GithubStarsPlugin extends Plugin {
             processContent,
             processFrontMatter,
         ]).andThen(([result]) => ok(result));
-    }
-
-    private getStatsFromDb(): Result<Stats, PluginDatabaseError> {
-        let result: Stats = {
-            starredCount: 0,
-            unstarredCount: 0,
-            lastRepoId: undefined,
-            lastStarDate: undefined,
-            lastImportDate: undefined,
-        };
-
-        return this.db.instance.map((db) => {
-            const getStatsStmt = db.prepare(getStatsQuery);
-            getStatsStmt.step();
-
-            const statsResult = getStatsStmt.getAsObject();
-            if (statsResult) {
-                result = {
-                    starredCount: statsResult.starredCount
-                        ? (statsResult.starredCount as number)
-                        : 0,
-                    unstarredCount: statsResult.unstarredCount
-                        ? (statsResult.unstarredCount as number)
-                        : 0,
-                    lastRepoId: statsResult.lastRepoId
-                        ? (statsResult.lastRepoId as string)
-                        : undefined,
-                    lastStarDate: statsResult.lastStarDate
-                        ? DateTime.fromISO(
-                              statsResult.lastStarDate as string,
-                          ).toUTC()
-                        : undefined,
-                    lastImportDate: statsResult.lastImportDate
-                        ? DateTime.fromISO(
-                              statsResult.lastImportDate as string,
-                          ).toUTC()
-                        : undefined,
-                };
-            }
-            getStatsStmt.free();
-            return result;
-        });
-    }
-
-    private getRepositoriesFromDb(): Result<
-        GitHub.Repository[],
-        PluginDatabaseError | unknown
-    > {
-        if (this.db.instance.isErr()) {
-            return err(this.db.instance.error);
-        }
-
-        const db = this.db.instance.value;
-        const selectRepositoriesStmt = db.prepare(selectRepositoriesQuery);
-        const selectRepositoryTopicsStmt = db.prepare(
-            selectRepositoryTopicsQuery,
-        );
-        const repos: GitHub.Repository[] = [];
-
-        while (selectRepositoriesStmt.step()) {
-            const row = selectRepositoriesStmt.getAsObject();
-            const deserializeResult = GitHub.Repository.fromDbObject(row);
-
-            if (deserializeResult.isErr()) {
-                selectRepositoriesStmt.free();
-                selectRepositoryTopicsStmt.free();
-                return err(deserializeResult.error);
-            }
-
-            const repo = deserializeResult.value;
-            selectRepositoryTopicsStmt.bind({ $repoPk: repo.id });
-            while (selectRepositoryTopicsStmt.step()) {
-                const topicRow = selectRepositoryTopicsStmt.getAsObject();
-                repo.repositoryTopics.push({
-                    name: topicRow.name as string,
-                    stargazerCount: topicRow.stargazerCount as number,
-                });
-            }
-            repos.push(repo);
-        }
-
-        selectRepositoriesStmt.free();
-        selectRepositoryTopicsStmt.free();
-
-        return ok(repos);
-    }
-
-    private async removeUnstarredRepositoresFromDb() {
-        if (this.db.instance.isErr()) {
-            return err(this.db.instance.error);
-        }
-
-        const db = this.db.instance.value;
-        const removeUnstarredRepositoriesStmt = db.prepare(
-            removeUnstarredRepositoriesQuery,
-        );
-        const removedRepositories: { owner: string; name: string }[] = [];
-        let result: Result<
-            typeof removedRepositories,
-            PluginDatabaseError | PluginError
-        > = ok(removedRepositories);
-        try {
-            db.run("BEGIN TRANSACTION;");
-            while (removeUnstarredRepositoriesStmt.step()) {
-                const row = removeUnstarredRepositoriesStmt.getAsObject();
-                removedRepositories.push({
-                    owner: row.owner as string,
-                    name: row.name as string,
-                });
-            }
-            if (removedRepositories.length) {
-                console.debug(removedRepositories);
-            }
-            const removeOrphanedOwnersResult = db.exec(
-                removeOrphanedOwnersQuery,
-            );
-            if (removeOrphanedOwnersResult.length) {
-                console.debug(
-                    "Removed orhaned owners: ",
-                    removeOrphanedOwnersResult,
-                );
-            }
-            const removeOrphanedLicensesResult = db.exec(
-                removeOrphanedLicensesQuery,
-            );
-            if (removeOrphanedLicensesResult.length) {
-                console.debug(
-                    "Removed orhaned licenses: ",
-                    removeOrphanedLicensesResult,
-                );
-            }
-            const removeOrphanedTopicsResult = db.exec(
-                removeOrphanedTopicsQuery,
-            );
-            if (removeOrphanedTopicsResult.length) {
-                console.debug(
-                    "Removed orhaned topics: ",
-                    removeOrphanedTopicsResult,
-                );
-            }
-            db.run("COMMIT;");
-            result = ok(removedRepositories);
-        } catch (error) {
-            db.run("ROLLBACK;");
-            result = err(PluginError.RemoveUnstarredRepositoriesFailed);
-        } finally {
-            removeUnstarredRepositoriesStmt.free();
-            // TODO: Handle possible error here
-            await this.db.save();
-        }
-        return result;
     }
 
     private updateDataWithNewContent(data: string, newContent: string): string {
@@ -832,8 +650,7 @@ export default class GithubStarsPlugin extends Plugin {
             });
     }
 
-    // TODO: Refactor this method
-    private async importDataToDb(): Promise<ImportResult> {
+    private async importDataToStorage() {
         const service = new GithubRepositoriesService(
             this.settings.accessToken,
         );
@@ -844,196 +661,28 @@ export default class GithubStarsPlugin extends Plugin {
             return err(totalCountResult.error);
         }
 
-        if (this.db.instance.isErr()) {
-            return err(this.db.instance.error);
-        }
-
         const totalCount = totalCountResult.value;
         new Notice(
             `Start import of ${totalCount} GitHub stars (page size is ${this.settings.pageSize} items)…`,
         );
 
-        const now = DateTime.utc();
         const statusBarAction = new StatusBarAction(
             this.statusBar as StatusBar,
             "download",
             "0%",
         );
         statusBarAction.start();
-
-        const db = this.db.instance.value;
-
-        const licensesStmt = db.prepare(insertLicensesQuery);
-        const ownersStmt = db.prepare(insertOwnersQuery);
-        const topicsStmt = db.prepare(insertTopicsQuery);
-        const repositoriesStmt = db.prepare(insertRepositoriesQuery);
-        const removeRepositoriesTopicsStmt = db.prepare(
-            removeRepositoriesTopicsQuery,
-        );
-        const upsertRepositoriesTopicsStmt = db.prepare(
-            insertRepositoriesTopicsQuery,
-        );
-
-        const importedReposIds: Set<string> = new Set();
-        const importedOwners: Set<string> = new Set();
-        const importedTopics: Set<string> = new Set();
-        const importedLicenses: Set<string> = new Set();
-
-        let result: Result<void, PluginError | GithubRepositoriesServiceError> =
-            ok();
         const repositoriesGen = service.getUserStarredRepositories(
             this.settings.pageSize,
         );
-
-        try {
-            db.run("BEGIN TRANSACTION;");
-            for await (const partResult of repositoriesGen) {
-                if (partResult.isErr()) {
-                    result = err(partResult.error);
-                    break;
-                }
-                for (const repo of partResult.value) {
-                    statusBarAction.updateState(
-                        `${Math.floor((importedReposIds.size / totalCount) * 100)}%`,
-                    );
-                    if (repo.licenseInfo?.spdxId) {
-                        licensesStmt.bind({
-                            $spdxId: repo.licenseInfo.spdxId,
-                            $name: repo.licenseInfo.name
-                                ? repo.licenseInfo.name
-                                : null,
-                            $nickname: repo.licenseInfo.nickname
-                                ? repo.licenseInfo.nickname
-                                : null,
-                            $url: repo.licenseInfo.url
-                                ? repo.licenseInfo.url.toString()
-                                : null,
-                        });
-                        licensesStmt.step();
-                    }
-
-                    ownersStmt.bind({
-                        $login: repo.owner.login,
-                        $url: repo.owner.url.toString(),
-                        $isOrganization: repo.owner.isOrganization ? 1 : 0,
-                    });
-                    ownersStmt.step();
-
-                    repositoriesStmt.bind({
-                        $id: repo.id,
-                        $name: repo.name,
-                        $description: repo.description
-                            ? repo.description
-                            : null,
-                        $url: repo.url.toString(),
-                        $homepageUrl: repo.homepageUrl
-                            ? repo.homepageUrl.toString()
-                            : null,
-                        $owner: repo.owner.login,
-                        $isArchived: repo.isArchived ? 1 : 0,
-                        $isFork: repo.isFork ? 1 : 0,
-                        $isPrivate: repo.isPrivate ? 1 : 0,
-                        $isTemplate: repo.isTemplate ? 1 : 0,
-                        $latestRelease: repo.latestRelease
-                            ? JSON.stringify(repo.latestRelease)
-                            : null,
-                        $license: repo.licenseInfo?.spdxId
-                            ? repo.licenseInfo.spdxId
-                            : null,
-                        $stargazerCount: repo.stargazerCount,
-                        $forkCount: repo.forkCount,
-                        $createdAt: repo.createdAt
-                            ? repo.createdAt.toUTC().toISO()
-                            : null,
-                        $pushedAt: repo.pushedAt
-                            ? repo.pushedAt.toUTC().toISO()
-                            : null,
-                        $starredAt: repo.starredAt
-                            ? repo.starredAt.toUTC().toISO()
-                            : null,
-                        $updatedAt: repo.updatedAt
-                            ? repo.updatedAt.toUTC().toISO()
-                            : null,
-                        $importedAt: now.toISO(),
-                        $languages: repo.languages
-                            ? JSON.stringify(repo.languages)
-                            : null,
-                        $fundingLinks: repo.fundingLinks
-                            ? JSON.stringify(repo.fundingLinks)
-                            : null,
-                    });
-                    repositoriesStmt.step();
-
-                    if (repo.repositoryTopics) {
-                        removeRepositoriesTopicsStmt.bind({
-                            $repoPk: repo.id,
-                        });
-                        removeRepositoriesTopicsStmt.step();
-
-                        for (const topic of repo.repositoryTopics) {
-                            topicsStmt.bind({
-                                $name: topic.name,
-                                $stargazerCount: topic.stargazerCount,
-                            });
-                            topicsStmt.step();
-
-                            upsertRepositoriesTopicsStmt.bind({
-                                $repoPk: repo.id,
-                                $topicPk: topic.name,
-                            });
-                            upsertRepositoriesTopicsStmt.step();
-                        }
-                    }
-
-                    importedReposIds.add(repo.id);
-                    importedOwners.add(repo.owner.login);
-                    repo.repositoryTopics.map((t) =>
-                        importedTopics.add(t.name),
-                    );
-                    if (repo.licenseInfo?.spdxId) {
-                        importedLicenses.add(repo.licenseInfo.spdxId);
-                    }
-                }
-            }
-
-            if (result.isOk()) {
-                // Update unstarred repositories
-                const allReposIds = new Set(
-                    single.flatten(
-                        db.exec("SELECT id FROM repositories")[0].values,
-                    ),
+        const result = await this.storage.import(
+            repositoriesGen,
+            (count: number) => {
+                statusBarAction.updateState(
+                    `${Math.floor((count / totalCount) * 100)}%`,
                 );
-                const unstarredReposIds = allReposIds.difference(
-                    importedReposIds,
-                ) as Set<string>;
-
-                if (unstarredReposIds.size) {
-                    db.run(
-                        `UPDATE repositories SET unstarredAt = ? WHERE id IN ( ${[...unstarredReposIds].fill("?").join(",")} )`,
-                        [now.toISO(), ...unstarredReposIds],
-                    );
-                }
-
-                db.run("COMMIT;");
-            } else {
-                db.run("ROLLBACK;");
-            }
-        } catch (error) {
-            db.run("ROLLBACK;");
-            console.error("Import transaction failed: ", error);
-            result = err(PluginError.ImportFailed);
-        } finally {
-            licensesStmt.free();
-            ownersStmt.free();
-            topicsStmt.free();
-            repositoriesStmt.free();
-            removeRepositoriesTopicsStmt.free();
-            upsertRepositoriesTopicsStmt.free();
-
-            // TODO: Handle possible error here
-            await this.db.save();
-            statusBarAction.stop();
-        }
+            },
+        );
 
         if (result.isOk()) {
             new Notice("Import of your GitHub stars was successful!");
@@ -1049,7 +698,8 @@ export default class GithubStarsPlugin extends Plugin {
     }
 
     private updateStats() {
-        return this.getStatsFromDb()
+        return this.storage
+            .getStats()
             .map((stats) =>
                 this.statusBar?.updateStats(
                     stats.starredCount,
