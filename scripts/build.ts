@@ -220,13 +220,19 @@ await build({
     useWasm: true,
     minify: !args["no-minify"],
     sourcemap: args.dev ?? false,
-}).andThrough(() => {
-    if (args.dev) {
-        return setupTestVault(
-            outputFolder,
-            "obsidian-github-stars",
-            "./test-vault",
-        );
-    }
-    return okAsync();
-});
+})
+    .andThrough(() => {
+        if (args.dev) {
+            return setupTestVault(
+                outputFolder,
+                "obsidian-github-stars",
+                "./test-vault",
+            );
+        }
+        return okAsync();
+    })
+    .andTee(() => console.log("Done!"))
+    .orElse((error) => {
+        console.error(`Build failed. Reason: ${error}`);
+        process.exit(1);
+    });
