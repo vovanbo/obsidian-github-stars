@@ -1,6 +1,24 @@
 # Changelog
 
 ---
+## [0.2.0](https://github.com/vovanbo/obsidian-github-stars/compare/0.1.2..0.2.0) - 2025-02-24
+
+### Features
+
+- Move SQLite DB file inside vault folder - ([089c8db](https://github.com/vovanbo/obsidian-github-stars/commit/089c8db179069dcb0d162743cd84662b645c3ab8)) - Vladimir Bolshakov
+
+### Refactoring
+
+- Move DB queries to separate file - ([3785091](https://github.com/vovanbo/obsidian-github-stars/commit/3785091777f61415a8c71db5fba5a426b08b70fd)) - Vladimir Bolshakov
+- Move GraphQL GitHub namespace to types - ([26756f6](https://github.com/vovanbo/obsidian-github-stars/commit/26756f6b383f43f40ebb6361482aaec5c9db6f55)) - Vladimir Bolshakov
+- Move errors to separate file - ([f03c526](https://github.com/vovanbo/obsidian-github-stars/commit/f03c526f4e8f0c269fcf3a0c7e14255a63272c37)) - Vladimir Bolshakov
+- Move PluginLock to utils - ([a9ed261](https://github.com/vovanbo/obsidian-github-stars/commit/a9ed2614ffdc8b5849abe78599dd719c802e7868)) - Vladimir Bolshakov
+
+### Build
+
+- Improve logging in build - ([3e865cf](https://github.com/vovanbo/obsidian-github-stars/commit/3e865cf0f4764c714c261daa59ef01cfd7877faf)) - Vladimir Bolshakov
+
+---
 ## [0.1.2](https://github.com/vovanbo/obsidian-github-stars/compare/0.1.1..0.1.2) - 2025-02-23
 
 ### Miscellaneous
