@@ -1,8 +1,8 @@
 import { Octokit } from "@octokit/core";
-import type { GraphQlQueryResponseData } from "@octokit/graphql";
 import { retry } from "@octokit/plugin-retry";
 import { Result, ResultAsync, err, ok } from "neverthrow";
-import { GitHub } from "./types";
+import { GithubRepositoriesServiceError } from "./errors";
+import { GitHub, type GitHubGraphQl } from "./types";
 
 const totalStarredRepositoriesCountQuery = `
 query () {
@@ -84,107 +84,6 @@ query ($after: String, $pageSize: Int) {
 }
 `;
 
-export namespace GitHubGraphQl {
-    export interface PageInfo {
-        endCursor?: string;
-        hasNextPage: boolean;
-        hasPreviousPage: boolean;
-        startCursor: string;
-    }
-
-    export interface Owner {
-        __typename: string;
-        login: string;
-        url: string;
-    }
-
-    export interface Release {
-        name?: string;
-        publishedAt?: string;
-        url: string;
-    }
-
-    export interface License {
-        name: string;
-        nickname?: string;
-        spdxId?: string;
-        url?: string;
-    }
-
-    export interface Language {
-        id: string;
-        name: string;
-    }
-
-    export interface LanguageEdge {
-        node: Language;
-    }
-
-    export interface LanguageConnection {
-        edges?: LanguageEdge[];
-    }
-
-    export interface Topic {
-        name: string;
-        stargazerCount: number;
-    }
-
-    export interface RepositoryTopic {
-        topic: Topic;
-    }
-
-    export interface RepositoryTopicConnection {
-        nodes?: RepositoryTopic[];
-    }
-
-    export interface FundingLink {
-        url: string;
-        platform: string;
-    }
-
-    export interface Repository {
-        id: string;
-        name: string;
-        owner: Owner;
-        description: string;
-        url: string;
-        homepageUrl?: string;
-        isArchived: boolean;
-        isFork: boolean;
-        isTemplate: boolean;
-        latestRelease?: Release;
-        licenseInfo?: License;
-        stargazerCount: number;
-        forkCount: number;
-        isPrivate: boolean;
-        createdAt: string;
-        pushedAt?: string;
-        updatedAt: string;
-        languages?: LanguageConnection;
-        repositoryTopics: RepositoryTopicConnection;
-        fundingLinks: FundingLink[];
-    }
-
-    export interface StarredRepositoryEdge {
-        starredAt: string;
-        node: Repository;
-    }
-
-    export interface StarredRepositoryConnection {
-        totalCount: number;
-        pageInfo: PageInfo;
-        edges: StarredRepositoryEdge[];
-    }
-
-    export interface AuthenticatedUserResponse {
-        starredRepositories: StarredRepositoryConnection;
-    }
-
-    export interface StarredRepositoriesResponse {
-        viewer: AuthenticatedUserResponse;
-    }
-}
-
 export interface StarredRepositoriesQueryResult {
     repositories: GitHub.Repository[];
     totalCount: number;
@@ -209,11 +108,6 @@ export interface IGithubRepositoriesService {
     >;
 }
 
-export enum GithubRepositoriesServiceError {
-    RequestFailed = "RequestFailed",
-    DeserializationFailed = "DeserializationFailed",
-}
-
 export class GithubRepositoriesService implements IGithubRepositoriesService {
     accessToken: string;
     client: Octokit;
@@ -236,10 +130,6 @@ export class GithubRepositoriesService implements IGithubRepositoriesService {
             GithubRepositoriesServiceError
         >
     > {
-        // console.debug(
-        //     `Start starredRepositoriesQuery (after: ${after}, pageSize: ${pageSize})`,
-        // );
-
         const makeRequest = ResultAsync.fromPromise(
             this.client.graphql<GitHubGraphQl.StarredRepositoriesResponse>(
                 starredRepositoriesQuery,
@@ -310,13 +200,10 @@ export class GithubRepositoriesService implements IGithubRepositoriesService {
         ResultAsync<number, GithubRepositoriesServiceError>
     > {
         return ResultAsync.fromPromise(
-            this.client.graphql(
+            this.client.graphql<GitHubGraphQl.StarredRepositoriesResponse>(
                 totalStarredRepositoriesCountQuery,
-            ) as Promise<GraphQlQueryResponseData>,
+            ),
             () => GithubRepositoriesServiceError.RequestFailed,
-        ).map(
-            (response) =>
-                response.viewer.starredRepositories.totalCount as number,
-        );
+        ).map((response) => response.viewer.starredRepositories.totalCount);
     }
 }
