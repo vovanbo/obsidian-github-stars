@@ -1,27 +1,25 @@
 import { single } from "itertools-ts";
 import { DateTime } from "luxon";
 import { type Result, err, ok } from "neverthrow";
+import getRepositoriesQuery from "./db/queries/getRepositories.sql";
+import getRepositoryTopicsQuery from "./db/queries/getRepositoriesTopics.sql";
+import getStatsQuery from "./db/queries/getStats.sql";
+import insertLicensesQuery from "./db/queries/insertLicenses.sql";
+import insertOwnersQuery from "./db/queries/insertOwners.sql";
+import insertRepositoriesQuery from "./db/queries/insertRepositories.sql";
+import insertRepositoriesTopicsQuery from "./db/queries/insertRepositoriesTopics.sql";
+import insertTopicsQuery from "./db/queries/insertTopics.sql";
+import removeOrphanedLicensesQuery from "./db/queries/removeOrphanedLicenses.sql";
+import removeOrphanedOwnersQuery from "./db/queries/removeOrphanedOwners.sql";
+import removeOrphanedTopicsQuery from "./db/queries/removeOrphanedTopics.sql";
+import removeRepositoriesTopicsQuery from "./db/queries/removeRepositoriesTopics.sql";
+import removeUnstarredRepositoriesQuery from "./db/queries/removeUnstarredRepositories.sql";
+import schemaQuery from "./db/queries/schema.sql";
 import {
     type GithubRepositoriesServiceError,
     PluginStorageError,
     type SqliteDatabaseError,
 } from "./errors";
-import {
-    getStatsQuery,
-    insertLicensesQuery,
-    insertOwnersQuery,
-    insertRepositoriesQuery,
-    insertRepositoriesTopicsQuery,
-    insertTopicsQuery,
-    removeOrphanedLicensesQuery,
-    removeOrphanedOwnersQuery,
-    removeOrphanedTopicsQuery,
-    removeRepositoriesTopicsQuery,
-    removeUnstarredRepositoriesQuery,
-    schemaQuery,
-    selectRepositoriesQuery,
-    selectRepositoryTopicsQuery,
-} from "./queries";
 import type { SqliteDatabase } from "./sqlite";
 import { GitHub } from "./types";
 
@@ -297,10 +295,8 @@ export class PluginStorage {
         }
 
         const db = this.db.instance.value;
-        const selectRepositoriesStmt = db.prepare(selectRepositoriesQuery);
-        const selectRepositoryTopicsStmt = db.prepare(
-            selectRepositoryTopicsQuery,
-        );
+        const selectRepositoriesStmt = db.prepare(getRepositoriesQuery);
+        const selectRepositoryTopicsStmt = db.prepare(getRepositoryTopicsQuery);
         const repos: GitHub.Repository[] = [];
 
         while (selectRepositoriesStmt.step()) {
@@ -362,7 +358,7 @@ export class PluginStorage {
             );
             if (removeOrphanedOwnersResult.length) {
                 console.debug(
-                    "Removed orhaned owners: ",
+                    "Removed orphaned owners: ",
                     removeOrphanedOwnersResult,
                 );
             }
@@ -371,7 +367,7 @@ export class PluginStorage {
             );
             if (removeOrphanedLicensesResult.length) {
                 console.debug(
-                    "Removed orhaned licenses: ",
+                    "Removed orphaned licenses: ",
                     removeOrphanedLicensesResult,
                 );
             }
@@ -380,7 +376,7 @@ export class PluginStorage {
             );
             if (removeOrphanedTopicsResult.length) {
                 console.debug(
-                    "Removed orhaned topics: ",
+                    "Removed orphaned topics: ",
                     removeOrphanedTopicsResult,
                 );
             }
