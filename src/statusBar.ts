@@ -1,4 +1,4 @@
-import { type IconName, setIcon } from "obsidian";
+import { type IconName, setIcon, setTooltip } from "obsidian";
 
 export class StatusBarAction {
     private el: HTMLSpanElement;
@@ -51,8 +51,7 @@ export class StatusBar {
 
     constructor(el: HTMLElement) {
         this.el = el;
-        this.el.ariaLabel = "GitHub stars";
-        this.el.setAttr("data-tooltip-position", "top");
+        setTooltip(this.el, "GitHub stars", { placement: "top" });
         const logo = this.el.createSpan({ cls: "logo" });
         setIcon(logo, "github");
         this.stats = this.el.createSpan({ cls: "stats" });
@@ -67,8 +66,9 @@ export class StatusBar {
         const statusBarStatsStarredCount = this.stats.createSpan({
             cls: "starred-count",
         });
-        statusBarStatsStarredCount.ariaLabel = "Starred repositories";
-        statusBarStatsStarredCount.setAttr("data-tooltip-position", "top");
+        setTooltip(statusBarStatsStarredCount, "Starred repositories", {
+            placement: "top",
+        });
         statusBarStatsStarredCount.setText(starred.toString());
 
         if (unstarred) {
@@ -79,11 +79,9 @@ export class StatusBar {
             const statusBarStatsUnstarredCount = this.stats.createSpan({
                 cls: "unstarred-count",
             });
-            statusBarStatsUnstarredCount.ariaLabel = "Unstarred repositories";
-            statusBarStatsUnstarredCount.setAttr(
-                "data-tooltip-position",
-                "top",
-            );
+            setTooltip(statusBarStatsUnstarredCount, "Unstarred repositories", {
+                placement: "top",
+            });
             statusBarStatsUnstarredCount.setText(unstarred.toString());
         }
     }
