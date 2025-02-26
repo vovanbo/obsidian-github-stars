@@ -46,4 +46,7 @@ export function bumpPackageVersion() {
         });
 }
 
-await bumpPackageVersion();
+await bumpPackageVersion().orElse((error) => {
+    console.error(`Unable to bump version. Reason: ${error}`);
+    process.exit(1);
+});

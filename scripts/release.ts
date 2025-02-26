@@ -104,6 +104,8 @@ await readJsonFile<IPackageJson>(packageFile)
     )
     .andThrough((metadata) => makeCommit(metadata.version as string))
     .andThen((metadata) => createGitTagOfNewVersion(metadata.version as string))
-    .andTee(() =>
-        console.log("Release is ready. Run `git push --follow-tags`"),
-    );
+    .andTee(() => console.log("Release is ready. Run `git push --follow-tags`"))
+    .orElse((error) => {
+        console.error(`Unable to make release. Reason: ${error}`);
+        process.exit(1);
+    });
