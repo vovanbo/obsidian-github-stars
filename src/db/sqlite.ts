@@ -1,3 +1,5 @@
+import sqlWasm from "!/sql.js/dist/sql-wasm.wasm";
+import { SqliteDatabaseError } from "@/db/errors";
 import {
     type Result,
     ResultAsync,
@@ -9,8 +11,6 @@ import {
 import type { DataAdapter } from "obsidian";
 import type { Database } from "sql.js";
 import initSqlJs from "sql.js";
-import sql_wasm from "../node_modules/sql.js/dist/sql-wasm.wasm";
-import { SqliteDatabaseError } from "./errors";
 
 export class SqliteDatabase {
     private adapter: DataAdapter;
@@ -47,7 +47,7 @@ export class SqliteDatabase {
     private initSqlModule() {
         if (typeof this.SQL === "undefined") {
             return ResultAsync.fromPromise(
-                initSqlJs({ wasmBinary: sql_wasm.buffer as ArrayBuffer }),
+                initSqlJs({ wasmBinary: sqlWasm.buffer as ArrayBuffer }),
                 () => SqliteDatabaseError.ModuleInitializationFailed,
             ).map((SQL) => {
                 this.SQL = SQL;
