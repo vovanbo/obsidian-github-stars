@@ -1,27 +1,27 @@
+import type { SqliteDatabaseError } from "@/db/errors";
+import getRepositoriesQuery from "@/db/queries/getRepositories.sql";
+import getRepositoryTopicsQuery from "@/db/queries/getRepositoriesTopics.sql";
+import getStatsQuery from "@/db/queries/getStats.sql";
+import insertLicensesQuery from "@/db/queries/insertLicenses.sql";
+import insertOwnersQuery from "@/db/queries/insertOwners.sql";
+import insertRepositoriesQuery from "@/db/queries/insertRepositories.sql";
+import insertRepositoriesTopicsQuery from "@/db/queries/insertRepositoriesTopics.sql";
+import insertTopicsQuery from "@/db/queries/insertTopics.sql";
+import removeOrphanedLicensesQuery from "@/db/queries/removeOrphanedLicenses.sql";
+import removeOrphanedOwnersQuery from "@/db/queries/removeOrphanedOwners.sql";
+import removeOrphanedTopicsQuery from "@/db/queries/removeOrphanedTopics.sql";
+import removeRepositoriesTopicsQuery from "@/db/queries/removeRepositoriesTopics.sql";
+import removeUnstarredRepositoriesQuery from "@/db/queries/removeUnstarredRepositories.sql";
+import schemaQuery from "@/db/queries/schema.sql";
+import type { SqliteDatabase } from "@/db/sqlite";
+import type { GithubRepositoriesServiceError } from "@/services/github/errors";
+import type { GitHubGraphQl } from "@/services/github/types";
+import type { GitHub } from "@/types";
 import { single } from "itertools-ts";
 import { DateTime } from "luxon";
 import { type Result, err, ok } from "neverthrow";
-import getRepositoriesQuery from "./db/queries/getRepositories.sql";
-import getRepositoryTopicsQuery from "./db/queries/getRepositoriesTopics.sql";
-import getStatsQuery from "./db/queries/getStats.sql";
-import insertLicensesQuery from "./db/queries/insertLicenses.sql";
-import insertOwnersQuery from "./db/queries/insertOwners.sql";
-import insertRepositoriesQuery from "./db/queries/insertRepositories.sql";
-import insertRepositoriesTopicsQuery from "./db/queries/insertRepositoriesTopics.sql";
-import insertTopicsQuery from "./db/queries/insertTopics.sql";
-import removeOrphanedLicensesQuery from "./db/queries/removeOrphanedLicenses.sql";
-import removeOrphanedOwnersQuery from "./db/queries/removeOrphanedOwners.sql";
-import removeOrphanedTopicsQuery from "./db/queries/removeOrphanedTopics.sql";
-import removeRepositoriesTopicsQuery from "./db/queries/removeRepositoriesTopics.sql";
-import removeUnstarredRepositoriesQuery from "./db/queries/removeUnstarredRepositories.sql";
-import schemaQuery from "./db/queries/schema.sql";
-import {
-    type GithubRepositoriesServiceError,
-    PluginStorageError,
-    type SqliteDatabaseError,
-} from "./errors";
-import type { SqliteDatabase } from "./sqlite";
-import { GitHub } from "./types";
+import { PluginStorageError } from "./errors";
+import { fromDbObject, fromGraphQlData } from "./serialization";
 
 export type Stats = {
     starredCount: number;
@@ -65,7 +65,10 @@ export class PluginStorage {
 
     public async import(
         repositoriesGen: AsyncGenerator<
-            Result<GitHub.Repository[], GithubRepositoriesServiceError>,
+            Result<
+                GitHubGraphQl.StarredRepositoryEdge[],
+                GithubRepositoriesServiceError
+            >,
             void,
             unknown
         >,
@@ -76,6 +79,7 @@ export class PluginStorage {
             | PluginStorageError
             | GithubRepositoriesServiceError
             | SqliteDatabaseError
+            | unknown
         >
     > {
         if (this.db.instance.isErr()) {
@@ -100,7 +104,7 @@ export class PluginStorage {
 
         let result: Result<
             void,
-            PluginStorageError | GithubRepositoriesServiceError
+            PluginStorageError | GithubRepositoriesServiceError | unknown
         > = ok();
         try {
             db.run("BEGIN TRANSACTION;");
@@ -109,7 +113,19 @@ export class PluginStorage {
                     result = err(partResult.error);
                     break;
                 }
-                for (const repo of partResult.value) {
+                for (const edge of partResult.value) {
+                    const repo = fromGraphQlData(edge).match(
+                        (value) => value,
+                        (error) => {
+                            console.error(error);
+                            result = err(error);
+                            return;
+                        },
+                    );
+                    if (!repo) {
+                        break;
+                    }
+
                     progressCallback(importedReposIds.size);
                     if (repo.licenseInfo?.spdxId) {
                         licensesStmt.bind({
@@ -201,6 +217,9 @@ export class PluginStorage {
                     }
 
                     importedReposIds.add(repo.id);
+                }
+                if (result.isErr()) {
+                    break;
                 }
             }
 
@@ -301,7 +320,7 @@ export class PluginStorage {
 
         while (selectRepositoriesStmt.step()) {
             const row = selectRepositoriesStmt.getAsObject();
-            const deserializeResult = GitHub.Repository.fromDbObject(row);
+            const deserializeResult = fromDbObject(row);
 
             if (deserializeResult.isErr()) {
                 selectRepositoriesStmt.free();
