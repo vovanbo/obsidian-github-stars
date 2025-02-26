@@ -1,0 +1,7 @@
+query () {
+  viewer {
+    starredRepositories(first: 1) {
+      totalCount
+    }
+  }
+}

@@ -1,0 +1,71 @@
+query ($after: String, $pageSize: Int) {
+  viewer {
+    starredRepositories(
+      first: $pageSize
+      after: $after
+      orderBy: { direction: DESC, field: STARRED_AT }
+    ) {
+      totalCount
+      pageInfo {
+        endCursor
+        hasNextPage
+      }
+
+      edges {
+        starredAt
+        node {
+          id
+          name
+          owner {
+            __typename
+            login
+            url
+          }
+          description
+          url
+          homepageUrl
+          isArchived
+          isFork
+          isTemplate
+          latestRelease {
+            name
+            publishedAt
+            url
+          }
+          licenseInfo {
+            name
+            nickname
+            spdxId
+            url
+          }
+          stargazerCount
+          forkCount
+          isPrivate
+          createdAt
+          pushedAt
+          updatedAt
+          languages(first: 10, orderBy: { field: SIZE, direction: DESC }) {
+            edges {
+              node {
+                id
+                name
+              }
+            }
+          }
+          repositoryTopics(first: 100) {
+            nodes {
+              topic {
+                name
+                stargazerCount
+              }
+            }
+          }
+          fundingLinks {
+            url
+            platform
+          }
+        }
+      }
+    }
+  }
+}
