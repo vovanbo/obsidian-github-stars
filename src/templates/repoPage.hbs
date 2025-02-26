@@ -1,0 +1,31 @@
+{{#with repo}}
+# [{{name}}]({{url}}){{#if unstarredAt}} *(unstarred)*{{/if}}
+{{#if description}}
+
+**{{description}}**
+
+{{/if}}
+> [!info]+
+{{#if homepageUrl}}
+> - Homepage: [{{homepageUrl}}]({{homepageUrl}})
+{{/if}}
+> - Owner: [{{owner.login}}]({{owner.url}})
+{{#if latestRelease}}
+> - Latest release: [{{latestReleaseName}}]({{latestRelease.url}}) published at {{dateFormat latestRelease.publishedAt "ff"}}
+{{/if}}
+{{#if licenseInfo}}
+> - License: [{{licenseInfo.name}}]({{licenseInfo.url}})
+{{/if}}
+{{#if languages}}
+> - Languages:
+{{#each languages}}
+>     - [{{this}}]({{searchLanguageUrl ../url this}})
+{{/each}}
+{{/if}}
+{{#if fundingLinks}}
+> - Funding links:
+{{#each fundingLinks}}
+>     - [{{#if this.platform}}{{this.platform}}{{else}}{{this.url}}{{/if}}]({{this.url}})
+{{/each}}
+{{/if}}
+{{/with}}

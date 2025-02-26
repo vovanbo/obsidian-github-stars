@@ -1,0 +1,28 @@
+# GitHub stars sorted by owners
+
+> [!example]+ Table of contents
+> > [!abstract]- Organizations
+{{#each sortedOrgs}}
+> > - [[#{{this}}]]
+{{/each}}
+>
+> > [!abstract]- Users
+{{#each sortedUsers}}
+> > - [[#{{this}}]]
+{{/each}}
+
+## Organizations
+{{#each reposOfOrgs}}
+### {{this.[0]}}
+{{#each this.[1]}}
+- {{#if this.unstarredAt}}~~{{/if}}[[{{@root.repostioriesFolder}}/{{this.owner.login}}/{{this.name}}|{{this.name}}]]{{#if this.description}}. {{this.description}}{{/if}}{{#if this.unstarredAt}}~~ *(unstarred at {{dateFormat this.unstarredAt "ff"}})*{{/if}}
+{{/each}}
+{{/each}}
+
+## Users
+{{#each reposOfUsers}}
+### {{this.[0]}}
+{{#each this.[1]}}
+- {{#if this.unstarredAt}}~~{{/if}}[[{{@root.repostioriesFolder}}/{{this.owner.login}}/{{this.name}}|{{this.name}}]]{{#if this.description}}. {{this.description}}{{/if}}{{#if this.unstarredAt}}~~ *(unstarred at {{dateFormat this.unstarredAt "ff"}})*{{/if}}
+{{/each}}
+{{/each}}
