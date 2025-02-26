@@ -1,5 +1,23 @@
+import type GithubStarsPlugin from "@/main";
 import { type App, PluginSettingTab, Setting, normalizePath } from "obsidian";
-import type GithubStarsPlugin from "./main";
+
+export interface PluginSettings {
+    pageSize: number;
+    accessToken: string;
+    destinationFolder: string;
+    indexPageByOwnersFileName: string;
+    indexPageByDaysFileName: string;
+    indexPageByLanguagesFileName: string;
+}
+
+export const DEFAULT_SETTINGS: PluginSettings = {
+    pageSize: 50,
+    accessToken: "",
+    destinationFolder: normalizePath("GitHub"),
+    indexPageByOwnersFileName: "Stars by owners.md",
+    indexPageByDaysFileName: "Stars by days.md",
+    indexPageByLanguagesFileName: "Stars by languages.md",
+};
 
 export class SettingsTab extends PluginSettingTab {
     plugin: GithubStarsPlugin;
