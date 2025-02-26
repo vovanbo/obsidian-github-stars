@@ -43,9 +43,9 @@ export const InlineWasmBunPlugin: BunPlugin = {
         // Hook into the "resolve" phase to intercept .wasm imports
         builder.onResolve({ filter: /\.wasm$/ }, async (args) => {
             // Resolve the .wasm file path relative to the directory of the importing file
-            const resolvedPath = path.resolve(
-                path.dirname(args.importer),
+            const resolvedPath = Bun.resolveSync(
                 args.path,
+                path.dirname(args.importer),
             );
             return { path: resolvedPath, namespace: "wasm" };
         });
@@ -74,9 +74,9 @@ export const InlineSqlBunPlugin: BunPlugin = {
         // Hook into the "resolve" phase to intercept .sql imports
         builder.onResolve({ filter: /\.sql$/ }, async (args) => {
             // Resolve the .sql file path relative to the directory of the importing file
-            const resolvedPath = path.resolve(
-                path.dirname(args.importer),
+            const resolvedPath = Bun.resolveSync(
                 args.path,
+                path.dirname(args.importer),
             );
             return { path: resolvedPath, namespace: "sql" };
         });
@@ -144,6 +144,8 @@ export interface BuildConfig {
     sourcemap: boolean;
 }
 
+const defaultBunPlugins = [InlineSqlBunPlugin];
+
 export function build(config: BuildConfig) {
     const createOutputFolder = ResultAsync.fromPromise(
         $`mkdir -p ${config.outputFolder}`,
@@ -184,8 +186,8 @@ export function build(config: BuildConfig) {
                     target: "browser",
                     format: config.format,
                     plugins: config.useWasm
-                        ? [InlineWasmBunPlugin, InlineSqlBunPlugin]
-                        : [InlineSqlBunPlugin],
+                        ? [InlineWasmBunPlugin, ...defaultBunPlugins]
+                        : defaultBunPlugins,
                     drop: config.drop,
                     sourcemap: config.sourcemap ? "inline" : "none",
                     external: [

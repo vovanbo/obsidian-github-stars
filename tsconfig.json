@@ -30,7 +30,8 @@
         // Path alias
         "baseUrl": ".",
         "paths": {
-            "@/*": ["src/*"]
+            "@/*": ["src/*"],
+            "!/*": ["node_modules/*"]
         }
     },
     "exclude": ["node_modules", "dist", "lib-dist", "scripts"]
