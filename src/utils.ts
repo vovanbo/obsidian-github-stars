@@ -1,7 +1,58 @@
+import { VaultError } from "@/errors";
+import { ResultAsync, errAsync, okAsync } from "neverthrow";
 import normalizeUrl from "normalize-url";
+import type { DataWriteOptions, Vault } from "obsidian";
 
 export function convertStringToURL(url: string): URL {
     return new URL(normalizeUrl(url, { defaultProtocol: "https" }));
+}
+
+export function getOrCreateFolder(vault: Vault, path: string) {
+    const folder = vault.getFolderByPath(path);
+    if (folder) {
+        return okAsync(folder);
+    }
+
+    return ResultAsync.fromPromise(
+        vault.createFolder(path),
+        () => VaultError.CreateFolderFailed,
+    );
+}
+
+export function getOrCreateFile(
+    vault: Vault,
+    path: string,
+    content: string,
+    options?: DataWriteOptions,
+) {
+    const file = vault.getFileByPath(path);
+    if (file) {
+        return okAsync({
+            file,
+            isCreated: false,
+        });
+    }
+
+    return ResultAsync.fromPromise(
+        vault.create(path, content, options),
+        () => VaultError.CreateFileFailed,
+    ).map((file) => {
+        return {
+            file,
+            isCreated: true,
+        };
+    });
+}
+
+export function removeFile(vault: Vault, path: string) {
+    const file = vault.getFileByPath(path);
+    if (!file) {
+        return errAsync(VaultError.FileNotFound);
+    }
+    return ResultAsync.fromPromise(
+        vault.delete(file),
+        () => VaultError.FileCanNotBeRemoved,
+    );
 }
 
 export class PluginLock {
