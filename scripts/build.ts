@@ -64,6 +64,29 @@ export const InlineWasmBunPlugin: BunPlugin = {
     },
 };
 
+export const InlineSqlBunPlugin: BunPlugin = {
+    name: "inline-sql",
+    setup(builder) {
+        // Hook into the "resolve" phase to intercept .sql imports
+        builder.onResolve({ filter: /\.sql$/ }, async (args) => {
+            // Resolve the .sql file path relative to the directory of the importing file
+            const resolvedPath = path.resolve(
+                path.dirname(args.importer),
+                args.path,
+            );
+            return { path: resolvedPath, namespace: "sql" };
+        });
+
+        // Handle the .sql file loading
+        builder.onLoad({ filter: /\.sql$/, namespace: "sql" }, async (args) => {
+            const sqlFileContent = await Bun.file(args.path).text();
+            const contents = `const sqlQuery = \`${sqlFileContent}\`;
+            export default sqlQuery;`;
+            return { contents, loader: "js" };
+        });
+    },
+};
+
 export interface WasmBuildConfig {
     target: "bundler" | "nodejs" | "web" | "no-modules" | "deno";
     path: string;
@@ -156,7 +179,9 @@ export function build(config: BuildConfig) {
                     minify: config.minify,
                     target: "browser",
                     format: config.format,
-                    plugins: config.useWasm ? [InlineWasmBunPlugin] : [],
+                    plugins: config.useWasm
+                        ? [InlineWasmBunPlugin, InlineSqlBunPlugin]
+                        : [InlineSqlBunPlugin],
                     drop: config.drop,
                     sourcemap: config.sourcemap ? "inline" : "none",
                     external: [
