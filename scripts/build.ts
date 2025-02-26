@@ -91,6 +91,58 @@ export const InlineSqlBunPlugin: BunPlugin = {
     },
 };
 
+export const InlineGraphQlBunPlugin: BunPlugin = {
+    name: "inline-graphql",
+    setup(builder) {
+        // Hook into the "resolve" phase to intercept .gql imports
+        builder.onResolve({ filter: /\.gql$/ }, async (args) => {
+            // Resolve the .gql file path relative to the directory of the importing file
+            const resolvedPath = Bun.resolveSync(
+                args.path,
+                path.dirname(args.importer),
+            );
+            return { path: resolvedPath, namespace: "graphql" };
+        });
+
+        // Handle the .gql file loading
+        builder.onLoad(
+            { filter: /\.gql$/, namespace: "graphql" },
+            async (args) => {
+                const graphQlQueryFileContent = await Bun.file(
+                    args.path,
+                ).text();
+                const contents = `const graphQlQuery = \`${graphQlQueryFileContent}\`;
+            export default graphQlQuery;`;
+                return { contents, loader: "js" };
+            },
+        );
+    },
+};
+
+export const CompiledHandlebarsTemplateBunPlugin: BunPlugin = {
+    name: "compile-handlebars",
+    setup(builder) {
+        builder.onResolve({ filter: /\.hbs$/ }, async (args) => {
+            const resolvedPath = Bun.resolveSync(
+                args.path,
+                path.dirname(args.importer),
+            );
+            return { path: resolvedPath, namespace: "handlebars" };
+        });
+
+        builder.onLoad(
+            { filter: /\.hbs$/, namespace: "handlebars" },
+            async (args) => {
+                const handlebarsFileContent = await Bun.file(args.path).text();
+                const contents = `import Handlebars from "handlebars";
+const graphQlQuery = Handlebars.compile(\`${handlebarsFileContent}\`, { strict: true });
+export default graphQlQuery;`;
+                return { contents, loader: "js" };
+            },
+        );
+    },
+};
+
 export interface WasmBuildConfig {
     target: "bundler" | "nodejs" | "web" | "no-modules" | "deno";
     path: string;
@@ -144,7 +196,11 @@ export interface BuildConfig {
     sourcemap: boolean;
 }
 
-const defaultBunPlugins = [InlineSqlBunPlugin];
+const defaultBunPlugins = [
+    InlineSqlBunPlugin,
+    InlineGraphQlBunPlugin,
+    CompiledHandlebarsTemplateBunPlugin,
+];
 
 export function build(config: BuildConfig) {
     const createOutputFolder = ResultAsync.fromPromise(
