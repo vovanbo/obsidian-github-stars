@@ -21,3 +21,6 @@ trim_trailing_whitespace = true
 [*.ts]
 indent_size = 4
 indent_style = space
+
+[*.hbs]
+insert_final_newline = false

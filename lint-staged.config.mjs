@@ -7,6 +7,6 @@ export default {
         "bunx @biomejs/biome check --write",
         () => "bun tsc --noEmit",
     ],
-    "*.json": "bunx @biomejs/biome check --write",
+    "*.{json,gql}": "bunx @biomejs/biome check --write",
     "*.scss": "bunx stylelint --fix",
 };
