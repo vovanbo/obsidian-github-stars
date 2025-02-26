@@ -25,18 +25,17 @@ CREATE TABLE IF NOT EXISTS repositories (
     isPrivate boolean NOT NULL,
     isTemplate boolean NOT NULL,
     latestRelease TEXT NULL,
-    license REFERENCES licenses (spdxId) ON DELETE
-    SET NULL ON UPDATE CASCADE NULL,
-        stargazerCount INTEGER NOT NULL,
-        forkCount INTEGER NOT NULL,
-        createdAt datetime NOT NULL,
-        pushedAt datetime NOT NULL,
-        starredAt datetime NOT NULL,
-        updatedAt datetime NOT NULL,
-        importedAt datetime NOT NULL,
-        unstarredAt datetime NULL,
-        languages TEXT NULL,
-        fundingLinks TEXT NULL
+    license REFERENCES licenses (spdxId) ON DELETE SET NULL ON UPDATE CASCADE NULL,
+    stargazerCount INTEGER NOT NULL,
+    forkCount INTEGER NOT NULL,
+    createdAt datetime NOT NULL,
+    pushedAt datetime NOT NULL,
+    starredAt datetime NOT NULL,
+    updatedAt datetime NOT NULL,
+    importedAt datetime NOT NULL,
+    unstarredAt datetime NULL,
+    languages TEXT NULL,
+    fundingLinks TEXT NULL
 );
 CREATE INDEX IF NOT EXISTS idx__repositoriesNames ON repositories (name);
 CREATE INDEX IF NOT EXISTS idx__repositoriesOwners ON repositories (owner);
