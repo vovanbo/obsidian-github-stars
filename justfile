@@ -25,7 +25,7 @@ dev: check
     bun ./scripts/build.ts --dev
 
 debug: check
-    bun ./scripts/build.ts --dev --no-minify
+    bun ./scripts/build.ts --dev --no-minify --source-maps
 
 bump-version:
     bun ./scripts/bump-version.ts

@@ -21,6 +21,10 @@ const { values: args } = parseArgs({
             type: "boolean",
             default: false,
         },
+        "source-maps": {
+            type: "boolean",
+            default: false,
+        },
         "no-minify": {
             type: "boolean",
             default: false,
@@ -244,7 +248,7 @@ await build({
     generateTypes: false,
     useWasm: true,
     minify: !args["no-minify"],
-    sourcemap: args.dev ?? false,
+    sourcemap: args["source-maps"] ?? false,
 })
     .andThrough(() => {
         if (args.dev) {
