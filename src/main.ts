@@ -1,14 +1,22 @@
 import { GithubStarsPluginApi } from "@/api";
 import { SqliteDatabase } from "@/db/sqlite";
+import { VaultError } from "@/errors";
+import { isEmpty, isMatch, isNull, isUndefined } from "@/helpers";
+import { confirm } from "@/modals";
 import { GithubRepositoriesService } from "@/services/github";
 import { DEFAULT_SETTINGS, type PluginSettings, SettingsTab } from "@/settings";
 import { StatusBar, StatusBarAction } from "@/statusBar";
 import { PluginStorage } from "@/storage";
 import type { GitHub } from "@/types";
-import { PluginLock, getOrCreateFolder, removeFile } from "@/utils";
+import {
+    PluginLock,
+    getOrCreateFolder,
+    removeFile,
+    renameFolder,
+} from "@/utils";
 import Handlebars from "handlebars";
 import { DateTime } from "luxon";
-import { ResultAsync, err, ok } from "neverthrow";
+import { ResultAsync, err, errAsync, ok, okAsync } from "neverthrow";
 import { type App, Notice, Plugin, type PluginManifest } from "obsidian";
 
 export default class GithubStarsPlugin extends Plugin {
@@ -46,7 +54,7 @@ export default class GithubStarsPlugin extends Plugin {
         await getOrCreateFolder(this.app.vault, this.dbFolder);
         const openStorageResult = await this.storage.init(
             this.dbFolder,
-            "stars.db",
+            this.settings.dbFileName,
         );
         if (openStorageResult.isErr()) {
             console.error(openStorageResult.error);
@@ -61,16 +69,27 @@ export default class GithubStarsPlugin extends Plugin {
             id: "full-sync",
             name: "Synchronize your starred repositories",
             callback: async () => {
-                return this.lock.run(async () => {
-                    return await (await this.importDataToStorage())
-                        .andThen(() => this.storage.getRepositories())
-                        .asyncAndThen((repos) => this.createPages(repos))
+                const result = await this.lock.run(async () =>
+                    (await this.importDataToStorage())
+                        .asyncAndThen(() => this.storage.getRepositories())
+                        .andThen((repos) => this.createOrUpdatePages(repos))
                         .andTee(() => this.updateStats())
                         .orElse((error) => {
                             console.error(error);
+                            new Notice(`ERROR. ${error}`, 0);
                             return err(error);
-                        });
-                });
+                        }),
+                );
+                return result.match(
+                    () => {
+                        new Notice(
+                            "Done! GitHub stars was imported successfully.",
+                        );
+                    },
+                    (error) => {
+                        new Notice(`ERROR. ${error}`, 0);
+                    },
+                );
             },
         });
 
@@ -78,15 +97,24 @@ export default class GithubStarsPlugin extends Plugin {
             id: "create-pages",
             name: "Create pages",
             callback: async () => {
-                return this.lock.run(async () => {
+                const result = await this.lock.run(async () => {
                     return await this.storage
                         .getRepositories()
-                        .asyncAndThen((repos) => this.createPages(repos))
+                        .andThen((repos) => this.createOrUpdatePages(repos))
                         .orElse((error) => {
                             console.error(error);
+                            new Notice(`ERROR. ${error}`, 0);
                             return err(error);
                         });
                 });
+                return result.match(
+                    () => {
+                        new Notice("Done! Pages was created successfully.");
+                    },
+                    (error) => {
+                        new Notice(`ERROR. ${error}`, 0);
+                    },
+                );
             },
         });
 
@@ -94,7 +122,7 @@ export default class GithubStarsPlugin extends Plugin {
             id: "remove-unstarred",
             name: "Remove unstarred repositories",
             callback: async () => {
-                return this.lock.run(async () => {
+                const result = await this.lock.run(async () => {
                     const removeResult = await (
                         await this.storage.removeUnstarredRepositores()
                     )
@@ -115,19 +143,31 @@ export default class GithubStarsPlugin extends Plugin {
                             console.error(
                                 `Remove unstarred files error: ${error}`,
                             );
+                            new Notice(`ERROR. ${error}`, 0);
                             return err(error);
                         });
                     if (removeResult.isOk() && removeResult.value.length) {
                         return await this.storage
                             .getRepositories()
-                            .asyncAndThen((repos) => this.createPages(repos))
+                            .andThen((repos) => this.createOrUpdatePages(repos))
                             .orElse((error) => {
                                 console.error(error);
+                                new Notice(`ERROR. ${error}`, 0);
                                 return err(error);
                             });
                     }
                     return removeResult;
                 });
+                return result.match(
+                    () => {
+                        new Notice(
+                            "Done! Unstarred repositories was removed successfully.",
+                        );
+                    },
+                    (error) => {
+                        new Notice(`ERROR. ${error}`, 0);
+                    },
+                );
             },
         });
     }
@@ -137,7 +177,7 @@ export default class GithubStarsPlugin extends Plugin {
         this.storage.close();
     }
 
-    async loadSettings() {
+    public async loadSettings() {
         this.settings = Object.assign(
             {},
             DEFAULT_SETTINGS,
@@ -145,8 +185,14 @@ export default class GithubStarsPlugin extends Plugin {
         );
     }
 
-    async saveSettings() {
-        await this.saveData(this.settings);
+    public saveSettings() {
+        return ResultAsync.fromThrowable(
+            (settings) => this.saveData(settings),
+            (error) => {
+                console.error(`ERROR. ${error}`);
+                return VaultError.UnableToSaveSettings;
+            },
+        )(this.settings);
     }
 
     private registerHandlebarsHelpers() {
@@ -245,11 +291,11 @@ export default class GithubStarsPlugin extends Plugin {
             });
     }
 
-    private createPages(repos: GitHub.Repository[]) {
+    private createOrUpdatePages(repos: GitHub.Repository[]) {
         new Notice("Creation of pages for your GitHub stars was started…");
 
         const total = repos.length;
-        const statusBarActions = {
+        const statusBarActions: Record<string, StatusBarAction> = {
             indexByDays: new StatusBarAction(
                 this.statusBar as StatusBar,
                 "calendar-days",
@@ -358,5 +404,104 @@ export default class GithubStarsPlugin extends Plugin {
                 console.error(error);
                 return err(error);
             });
+    }
+
+    public async updateSettings(settings: Partial<PluginSettings>) {
+        const result = await this.lock.run(async () => {
+            const newSettings: Partial<PluginSettings> = {};
+            if (
+                !isUndefined(settings.accessToken) &&
+                this.settings.accessToken !== settings.accessToken
+            ) {
+                newSettings.accessToken = settings.accessToken;
+            }
+
+            if (
+                !isUndefined(settings.pageSize) &&
+                this.settings.pageSize !== settings.pageSize
+            ) {
+                newSettings.pageSize = settings.pageSize;
+                if (newSettings.pageSize < 1) {
+                    newSettings.pageSize = 1;
+                }
+                if (newSettings.pageSize > 100) {
+                    newSettings.pageSize = 100;
+                }
+            }
+
+            if (
+                !isUndefined(settings.destinationFolder) &&
+                this.settings.destinationFolder !== settings.destinationFolder
+            ) {
+                const isRenameConfirmed = await confirm({
+                    app: this.app,
+                    title: "Rename destination folder?",
+                    message: `Destination folder will be renamed from <pre>${this.settings.destinationFolder}</pre> to <pre>${settings.destinationFolder}</pre>`,
+                    okButtonText: "Yes",
+                    cancelButtonText: "No",
+                });
+                if (isRenameConfirmed) {
+                    newSettings.destinationFolder = settings.destinationFolder;
+                }
+            }
+
+            if (isEmpty(newSettings) || isMatch(this.settings, newSettings)) {
+                console.debug("Nothing to save");
+                return okAsync();
+            }
+
+            const saveSettings = () => {
+                this.settings = { ...this.settings, ...newSettings };
+                return this.saveSettings();
+            };
+
+            if (!isUndefined(newSettings.destinationFolder)) {
+                const isNewDestinationFolderExists = !isNull(
+                    this.app.vault.getFolderByPath(
+                        newSettings.destinationFolder,
+                    ),
+                );
+                if (isNewDestinationFolderExists) {
+                    return errAsync(VaultError.NewDestinationFolderIsExists);
+                }
+                const currentDestinationFolder = this.app.vault.getFolderByPath(
+                    this.settings.destinationFolder,
+                );
+                if (isNull(currentDestinationFolder)) {
+                    return errAsync(VaultError.UnableToRenameDestinationFolder);
+                }
+
+                return saveSettings()
+                    .andThen(() => this.storage.close())
+                    .andThen(() =>
+                        renameFolder(
+                            this.app.vault,
+                            currentDestinationFolder,
+                            newSettings.destinationFolder as string,
+                        ),
+                    )
+                    .andThen(() =>
+                        this.storage.init(
+                            this.dbFolder,
+                            this.settings.dbFileName,
+                        ),
+                    )
+                    .andThen(() => this.updateStats());
+            }
+
+            return saveSettings();
+        });
+        return result.match(
+            (lockedResult) => {
+                return lockedResult.orElse((error) => {
+                    new Notice(`ERROR. ${error}`, 0);
+                    return err(error);
+                });
+            },
+            (lockError) => {
+                new Notice(`ERROR. ${lockError}`, 0);
+                return err(lockError);
+            },
+        );
     }
 }

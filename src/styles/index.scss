@@ -3,7 +3,7 @@
     opacity: 0.2;
   }
 
- 33% {
+  33% {
     opacity: 1;
   }
 
@@ -79,4 +79,34 @@
     }
   }
 
+}
+
+.obsidian-github-stars.settings {
+  opacity: 1;
+  transition: opacity 0.5s;
+
+  &.save-in-progress {
+    opacity: 0.25;
+  }
+}
+
+.obsidian-github-stars.modal-container {
+  .modal-content-wrapper {
+    pre {
+      display: inline-block;
+      background-color: var(--color-base-20);
+      padding: var(--size-2-1) var(--size-2-2);
+      border-radius: var(--radius-s);
+      border: 1px var(--color-base-35) solid;
+      margin: 0;
+      font-size: medium;
+    }
+  }
+
+  .modal-buttons-wrapper {
+    display: flex;
+    padding-top: var(--size-4-4);
+    gap: var(--size-4-2);
+    justify-content: flex-end;
+  }
 }

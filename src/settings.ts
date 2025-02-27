@@ -1,5 +1,13 @@
 import type GithubStarsPlugin from "@/main";
-import { type App, PluginSettingTab, Setting, normalizePath } from "obsidian";
+import {
+    type App,
+    type Debouncer,
+    PluginSettingTab,
+    Setting,
+    debounce,
+    normalizePath,
+} from "obsidian";
+import { isUndefined } from "./helpers";
 
 export interface PluginSettings {
     pageSize: number;
@@ -8,6 +16,8 @@ export interface PluginSettings {
     indexPageByOwnersFileName: string;
     indexPageByDaysFileName: string;
     indexPageByLanguagesFileName: string;
+    dbFileName: string;
+    [key: string]: unknown;
 }
 
 export const DEFAULT_SETTINGS: PluginSettings = {
@@ -17,73 +27,108 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     indexPageByOwnersFileName: "Stars by owners.md",
     indexPageByDaysFileName: "Stars by days.md",
     indexPageByLanguagesFileName: "Stars by languages.md",
+    dbFileName: "stars.db",
 };
 
 export class SettingsTab extends PluginSettingTab {
     plugin: GithubStarsPlugin;
+    protected debouncedUpdateSettings?: Debouncer<
+        [Partial<PluginSettings>],
+        Promise<void>
+    >;
+    private inProgressCssClass = "save-in-progress";
+    private accessTokenSetting?: Setting;
+    private pageSizeSetting?: Setting;
+    private destinationFolderSetting?: Setting;
 
     constructor(app: App, plugin: GithubStarsPlugin) {
         super(app, plugin);
         this.plugin = plugin;
+        this.initSettings();
     }
 
-    override display(): void {
+    async updateSettings(newSettings: Partial<PluginSettings>) {
+        if (isUndefined(this.debouncedUpdateSettings)) {
+            this.debouncedUpdateSettings = debounce(
+                async (settings: Partial<PluginSettings>) => {
+                    this.containerEl.addClass(this.inProgressCssClass);
+                    this.accessTokenSetting?.setDisabled(true);
+                    this.pageSizeSetting?.setDisabled(true);
+                    this.destinationFolderSetting?.setDisabled(true);
+
+                    await this.plugin.updateSettings(settings);
+
+                    this.accessTokenSetting?.setDisabled(false);
+                    this.pageSizeSetting?.setDisabled(false);
+                    this.destinationFolderSetting?.setDisabled(false);
+                    this.containerEl.removeClass(this.inProgressCssClass);
+                    this.redraw();
+                },
+                1000,
+                true,
+            );
+        }
+        return this.debouncedUpdateSettings(newSettings);
+    }
+
+    private initSettings() {
         const { containerEl } = this;
-
-        containerEl.empty();
-        containerEl.createEl("h1", { text: "GitHub stars" });
-
-        const accessTokenSetting = new Setting(containerEl).setName(
+        this.accessTokenSetting = new Setting(containerEl).setName(
             "GitHub API access token",
         );
-        accessTokenSetting.addText((text) => {
-            text.setValue(this.plugin.settings.accessToken).onChange(
-                async (value) => {
-                    this.plugin.settings.accessToken = value;
-                    await this.plugin.saveSettings();
-                },
-            );
-        });
-        accessTokenSetting.controlEl.children[0].setAttr("type", "password");
-
-        const pageSizeSetting = new Setting(containerEl)
+        this.pageSizeSetting = new Setting(containerEl)
             .setName("API query page size")
             .setDesc(
                 "GitHub GraphQL API request page size. In range from 1 to 100.",
             );
-        pageSizeSetting.addText((text) =>
-            text
-                .setValue(this.plugin.settings.pageSize.toString())
-                .onChange(async (value) => {
-                    let parsedValue = Number.parseInt(value);
-                    if (parsedValue < 1) {
-                        parsedValue = 1;
-                    }
-                    if (parsedValue > 100) {
-                        parsedValue = 100;
-                    }
-                    this.plugin.settings.pageSize = parsedValue;
-                    await this.plugin.saveSettings();
-                }),
-        );
-        const pageSizeInputEl = pageSizeSetting.controlEl.children[0];
-        pageSizeInputEl.setAttr("type", "number");
-        pageSizeInputEl.setAttr("min", "1");
-        pageSizeInputEl.setAttr("max", "100");
-
-        new Setting(containerEl)
+        this.destinationFolderSetting = new Setting(containerEl)
             .setName("Destination folder")
             .setDesc(
                 "Folder inside your vault where new documents will be created. Relative to your vault root.",
-            )
-            .addText((text) =>
-                text
-                    .setValue(this.plugin.settings.destinationFolder)
-                    .onChange(async (value) => {
-                        this.plugin.settings.destinationFolder =
-                            normalizePath(value);
-                        await this.plugin.saveSettings();
+            );
+    }
+
+    public redraw() {
+        const { containerEl } = this;
+
+        containerEl.empty();
+        containerEl.addClasses([this.plugin.manifest.id, "settings"]);
+
+        this.initSettings();
+
+        this.accessTokenSetting?.addText((text) => {
+            text.inputEl.setAttr("type", "password");
+            text.setValue(this.plugin.settings.accessToken).onChange(
+                async (value) =>
+                    this.updateSettings({
+                        accessToken: value,
                     }),
             );
+        });
+
+        this.pageSizeSetting?.addText((text) => {
+            text.inputEl.setAttr("type", "number");
+            text.inputEl.setAttr("min", "1");
+            text.inputEl.setAttr("max", "100");
+            text.setValue(this.plugin.settings.pageSize.toString()).onChange(
+                async (value) =>
+                    this.updateSettings({
+                        pageSize: Number.parseInt(value),
+                    }),
+            );
+        });
+
+        this.destinationFolderSetting?.addText((text) => {
+            text.setValue(this.plugin.settings.destinationFolder).onChange(
+                async (value) =>
+                    this.updateSettings({
+                        destinationFolder: normalizePath(value),
+                    }),
+            );
+        });
+    }
+
+    override display(): void {
+        this.redraw();
     }
 }
