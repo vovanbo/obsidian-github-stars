@@ -1,4 +1,5 @@
 import type { VaultError } from "@/errors";
+import { isNull, isUndefined } from "@/helpers";
 import indexPageByDaysTemplate from "@/templates/indexPageByDays.hbs";
 import indexPageByLanguagesTemplate from "@/templates/indexPageByLanguages.hbs";
 import indexPageByOwnersTemplate from "@/templates/indexPageByOwners.hbs";
@@ -98,7 +99,7 @@ export class GithubStarsPluginApi {
         }
 
         const starredCount = Stream.of(repos)
-            .filter((r) => typeof r.unstarredAt === "undefined")
+            .filter((r) => isUndefined(r.unstarredAt) || isNull(r.unstarredAt))
             .toCount();
         const unstarredCount = Stream.of(repos)
             .filter((r) => !!r.unstarredAt)
@@ -150,7 +151,7 @@ export class GithubStarsPluginApi {
             .groupBy((r) => r.mainLanguage)
             .sort();
         const starredCount = Stream.of(repos)
-            .filter((r) => typeof r.unstarredAt === "undefined")
+            .filter((r) => isUndefined(r.unstarredAt) || isNull(r.unstarredAt))
             .toCount();
         const unstarredCount = Stream.of(repos)
             .filter((r) => !!r.unstarredAt)
@@ -221,7 +222,7 @@ export class GithubStarsPluginApi {
             .groupBy((r) => r.owner.login)
             .sort();
         const starredCount = Stream.of(repos)
-            .filter((r) => typeof r.unstarredAt === "undefined")
+            .filter((r) => isUndefined(r.unstarredAt) || isNull(r.unstarredAt))
             .toCount();
         const unstarredCount = Stream.of(repos)
             .filter((r) => !!r.unstarredAt)
