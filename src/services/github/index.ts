@@ -1,6 +1,6 @@
 import { Octokit } from "@octokit/core";
 import { retry } from "@octokit/plugin-retry";
-import { type Result, ResultAsync, ok } from "neverthrow";
+import { type Result, ResultAsync } from "neverthrow";
 import { GithubRepositoriesServiceError } from "./errors";
 import starredRepositoriesQuery from "./queries/starredRepositories.gql";
 import totalStarredRepositoriesCountQuery from "./queries/totalStarredRepositoriesCount.gql";
@@ -13,23 +13,24 @@ export interface StarredRepositoriesQueryResult {
     endCursor?: string;
 }
 
+export type StarredRepositoriesGenerator = AsyncGenerator<
+    Result<
+        GitHubGraphQl.StarredRepositoryEdge[],
+        GithubRepositoriesServiceError
+    >,
+    void,
+    unknown
+>;
+
 export interface IGithubRepositoriesService {
     accessToken: string;
     client: Octokit;
 
-    getUserStarredRepositories(
-        pageSize: number,
-    ): AsyncGenerator<
-        Result<
-            GitHubGraphQl.StarredRepositoryEdge[],
-            GithubRepositoriesServiceError
-        >,
-        void,
-        unknown
-    >;
+    getUserStarredRepositories(pageSize: number): StarredRepositoriesGenerator;
 
-    getTotalStarredRepositoriesCount(): Promise<
-        ResultAsync<number, GithubRepositoriesServiceError>
+    getTotalStarredRepositoriesCount(): ResultAsync<
+        number,
+        GithubRepositoriesServiceError
     >;
 }
 
@@ -46,14 +47,12 @@ export class GithubRepositoriesService implements IGithubRepositoriesService {
         });
     }
 
-    private async getOnePageOfStarredRepos(
+    private getOnePageOfStarredRepos(
         after: string,
         pageSize: number,
-    ): Promise<
-        ResultAsync<
-            StarredRepositoriesQueryResult,
-            GithubRepositoriesServiceError
-        >
+    ): ResultAsync<
+        StarredRepositoriesQueryResult,
+        GithubRepositoriesServiceError
     > {
         const makeRequest = ResultAsync.fromPromise(
             this.client.graphql<GitHubGraphQl.StarredRepositoriesResponse>(
@@ -66,28 +65,21 @@ export class GithubRepositoriesService implements IGithubRepositoriesService {
             () => GithubRepositoriesServiceError.RequestFailed,
         );
 
-        return makeRequest.andThen((response) => {
-            return ok({
+        return makeRequest.map((response) => {
+            return {
                 repositories: response.viewer.starredRepositories.edges,
                 totalCount: response.viewer.starredRepositories.totalCount,
                 hasNextPage:
                     response.viewer.starredRepositories.pageInfo.hasNextPage,
                 endCursor:
                     response.viewer.starredRepositories.pageInfo.endCursor,
-            });
+            };
         });
     }
 
     public async *getUserStarredRepositories(
         pageSize: number,
-    ): AsyncGenerator<
-        Result<
-            GitHubGraphQl.StarredRepositoryEdge[],
-            GithubRepositoriesServiceError
-        >,
-        void,
-        unknown
-    > {
+    ): StarredRepositoriesGenerator {
         let after = "";
         let hasNextPage = false;
         let totalFetched = 0;
@@ -96,18 +88,19 @@ export class GithubRepositoriesService implements IGithubRepositoriesService {
                 after,
                 pageSize,
             );
-            const result = requestResult.andThen((data) => {
+            const result = requestResult.map((data) => {
                 hasNextPage = data.hasNextPage;
                 after = data.endCursor ? data.endCursor : "";
                 totalFetched += data.repositories.length;
-                return ok(data.repositories);
+                return data.repositories;
             });
             yield result;
         } while (hasNextPage);
     }
 
-    public async getTotalStarredRepositoriesCount(): Promise<
-        ResultAsync<number, GithubRepositoriesServiceError>
+    public getTotalStarredRepositoriesCount(): ResultAsync<
+        number,
+        GithubRepositoriesServiceError
     > {
         return ResultAsync.fromPromise(
             this.client.graphql<GitHubGraphQl.StarredRepositoriesResponse>(
