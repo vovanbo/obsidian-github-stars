@@ -14,12 +14,19 @@ import removeRepositoriesTopicsQuery from "@/db/queries/removeRepositoriesTopics
 import removeUnstarredRepositoriesQuery from "@/db/queries/removeUnstarredRepositories.sql";
 import schemaQuery from "@/db/queries/schema.sql";
 import type { SqliteDatabase } from "@/db/sqlite";
+import type { StarredRepositoriesGenerator } from "@/services/github";
 import type { GithubRepositoriesServiceError } from "@/services/github/errors";
-import type { GitHubGraphQl } from "@/services/github/types";
 import type { GitHub } from "@/types";
 import { single } from "itertools-ts";
 import { DateTime } from "luxon";
-import { type Result, err, ok } from "neverthrow";
+import {
+    type Result,
+    type ResultAsync,
+    err,
+    errAsync,
+    ok,
+    okAsync,
+} from "neverthrow";
 import { PluginStorageError } from "./errors";
 import { fromDbObject, fromGraphQlData } from "./serialization";
 
@@ -38,16 +45,22 @@ export class PluginStorage {
         this.db = db;
     }
 
-    public async init(dbFolder: string, dbFile: string) {
+    public init(
+        dbFolder: string,
+        dbFile: string,
+    ): ResultAsync<this, PluginStorageError> {
         return this.db
             .init(dbFolder, dbFile)
             .andThen((db) => {
                 try {
+                    db.run("BEGIN TRANSACTION;");
                     db.run(schemaQuery);
-                    return ok(db);
+                    db.run("COMMIT;");
+                    return okAsync(db);
                 } catch (e) {
+                    db.run("ROLLBACK;");
                     console.error(`Database error: ${e}`);
-                    return err(PluginStorageError.SchemaCreationFailed);
+                    return errAsync(PluginStorageError.SchemaCreationFailed);
                 }
             })
             .andThrough(() => this.db.save())
@@ -55,33 +68,18 @@ export class PluginStorage {
             .orElse((error) => {
                 console.error(`ERROR. ${error}`);
                 this.close();
-                return err(PluginStorageError.InitializationFailed);
+                return errAsync(PluginStorageError.InitializationFailed);
             });
     }
 
-    public close() {
+    public close(): ResultAsync<void, SqliteDatabaseError> {
         return this.db.close();
     }
 
     public async import(
-        repositoriesGen: AsyncGenerator<
-            Result<
-                GitHubGraphQl.StarredRepositoryEdge[],
-                GithubRepositoriesServiceError
-            >,
-            void,
-            unknown
-        >,
+        repositoriesGen: StarredRepositoriesGenerator,
         progressCallback: (count: number) => void,
-    ): Promise<
-        Result<
-            void,
-            | PluginStorageError
-            | GithubRepositoriesServiceError
-            | SqliteDatabaseError
-            | unknown
-        >
-    > {
+    ): Promise<Result<void, unknown>> {
         if (this.db.instance.isErr()) {
             return err(this.db.instance.error);
         }
@@ -127,6 +125,7 @@ export class PluginStorage {
                     }
 
                     progressCallback(importedReposIds.size);
+
                     if (repo.licenseInfo?.spdxId) {
                         licensesStmt.bind({
                             $spdxId: repo.licenseInfo.spdxId,
@@ -256,14 +255,11 @@ export class PluginStorage {
             repositoriesStmt.free();
             removeRepositoriesTopicsStmt.free();
             upsertRepositoriesTopicsStmt.free();
-
-            // TODO: Handle possible error here
-            await this.db.save();
         }
-        return result;
+        return result.asyncAndThen(() => this.db.save());
     }
 
-    public getStats(): Result<Stats, SqliteDatabaseError> {
+    public getStats(): ResultAsync<Stats, SqliteDatabaseError> {
         let result: Stats = {
             starredCount: 0,
             unstarredCount: 0,
@@ -272,7 +268,7 @@ export class PluginStorage {
             lastImportDate: undefined,
         };
 
-        return this.db.instance.map((db) => {
+        return this.db.instance.asyncMap(async (db) => {
             const getStatsStmt = db.prepare(getStatsQuery);
             getStatsStmt.step();
 
@@ -305,12 +301,9 @@ export class PluginStorage {
         });
     }
 
-    public getRepositories(): Result<
-        GitHub.Repository[],
-        SqliteDatabaseError | unknown
-    > {
+    public getRepositories(): ResultAsync<GitHub.Repository[], unknown> {
         if (this.db.instance.isErr()) {
-            return err(this.db.instance.error);
+            return errAsync(this.db.instance.error);
         }
 
         const db = this.db.instance.value;
@@ -325,7 +318,7 @@ export class PluginStorage {
             if (deserializeResult.isErr()) {
                 selectRepositoriesStmt.free();
                 selectRepositoryTopicsStmt.free();
-                return err(deserializeResult.error);
+                return errAsync(deserializeResult.error);
             }
 
             const repo = deserializeResult.value;
@@ -343,12 +336,15 @@ export class PluginStorage {
         selectRepositoriesStmt.free();
         selectRepositoryTopicsStmt.free();
 
-        return ok(repos);
+        return okAsync(repos);
     }
 
-    public async removeUnstarredRepositores() {
+    public removeUnstarredRepositores(): ResultAsync<
+        { owner: string; name: string }[],
+        SqliteDatabaseError | PluginStorageError
+    > {
         if (this.db.instance.isErr()) {
-            return err(this.db.instance.error);
+            return errAsync(this.db.instance.error);
         }
 
         const db = this.db.instance.value;
@@ -356,10 +352,10 @@ export class PluginStorage {
             removeUnstarredRepositoriesQuery,
         );
         const removedRepositories: { owner: string; name: string }[] = [];
-        let result: Result<
+        let result: ResultAsync<
             typeof removedRepositories,
             SqliteDatabaseError | PluginStorageError
-        > = ok(removedRepositories);
+        > = okAsync(removedRepositories);
         try {
             db.run("BEGIN TRANSACTION;");
             while (removeUnstarredRepositoriesStmt.step()) {
@@ -400,15 +396,15 @@ export class PluginStorage {
                 );
             }
             db.run("COMMIT;");
-            result = ok(removedRepositories);
+            result = okAsync(removedRepositories);
         } catch (error) {
             db.run("ROLLBACK;");
-            result = err(PluginStorageError.RemoveUnstarredRepositoriesFailed);
+            result = errAsync(
+                PluginStorageError.RemoveUnstarredRepositoriesFailed,
+            );
         } finally {
             removeUnstarredRepositoriesStmt.free();
-            // TODO: Handle possible error here
-            await this.db.save();
         }
-        return result;
+        return result.andThrough(() => this.db.save());
     }
 }
