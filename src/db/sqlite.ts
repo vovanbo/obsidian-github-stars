@@ -1,5 +1,6 @@
 import sqlWasm from "!/sql.js/dist/sql-wasm.wasm";
 import { SqliteDatabaseError } from "@/db/errors";
+import { isUndefined } from "@/helpers";
 import {
     type Result,
     ResultAsync,
@@ -29,10 +30,10 @@ export class SqliteDatabase {
 
     public get isInitialized() {
         return (
-            typeof this.SQL !== "undefined" &&
-            typeof this.db !== "undefined" &&
-            typeof this.dbFolder !== "undefined" &&
-            typeof this.dbFile !== "undefined"
+            !isUndefined(this.SQL) &&
+            !isUndefined(this.db) &&
+            !isUndefined(this.dbFolder) &&
+            !isUndefined(this.dbFile)
         );
     }
 
@@ -45,7 +46,7 @@ export class SqliteDatabase {
     }
 
     private initSqlModule() {
-        if (typeof this.SQL === "undefined") {
+        if (isUndefined(this.SQL)) {
             return ResultAsync.fromPromise(
                 initSqlJs({ wasmBinary: sqlWasm.buffer as ArrayBuffer }),
                 () => SqliteDatabaseError.ModuleInitializationFailed,
@@ -114,8 +115,8 @@ export class SqliteDatabase {
         // TODO Migrations
     }
 
-    public close(): Result<void, SqliteDatabaseError> {
-        return this.instance.map((db) => {
+    public close(): ResultAsync<void, SqliteDatabaseError> {
+        return this.instance.asyncMap(async (db) => {
             db.close();
             this.db = undefined;
         });
