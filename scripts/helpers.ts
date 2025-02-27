@@ -11,6 +11,9 @@ import {
 } from "./common";
 import { FileSystemError } from "./errors";
 
+export const isUndefined = (val: unknown): val is undefined =>
+    val === undefined;
+
 export function readJsonFile<T>(
     path: string | URL,
 ): ResultAsync<T, FileSystemError> {
@@ -148,7 +151,7 @@ export function setupTestVault(
             ),
         )
         .andTee((result) => {
-            if (typeof result === "undefined") {
+            if (isUndefined(result)) {
                 console.log(
                     "Community plugins already configured in test vault",
                 );
