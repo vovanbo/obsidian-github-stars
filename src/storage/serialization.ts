@@ -1,3 +1,4 @@
+import { isObject } from "@/helpers";
 import type { GitHubGraphQl } from "@/services/github/types";
 import { GitHub } from "@/types";
 import { convertStringToURL } from "@/utils";
@@ -91,6 +92,11 @@ export function fromGraphQlData(
     }
 }
 
+type ParsedFundingLink = {
+    url: string;
+    platform: string;
+};
+
 export function fromDbObject(
     row: ParamsObject,
 ): Result<GitHub.Repository, unknown> {
@@ -98,9 +104,10 @@ export function fromDbObject(
         const parsedLatestRelease = row.latestRelease
             ? JSON.parse(row.latestRelease as string)
             : undefined;
-        const parsedFundingLinks = row.fundingLinks
-            ? JSON.parse(row.fundingLinks as string)
-            : undefined;
+
+        const parsedFundingLinks: ParsedFundingLink[] = row.fundingLinks
+            ? (JSON.parse(row.fundingLinks as string) as ParsedFundingLink[])
+            : [];
         const repo = new GitHub.Repository({
             id: row.id as string,
             name: row.name as string,
@@ -120,7 +127,7 @@ export function fromDbObject(
             isFork: !!(row.isFork as number),
             isPrivate: !!(row.isPrivate as number),
             isTemplate: !!(row.isTemplate as number),
-            latestRelease: parsedLatestRelease
+            latestRelease: isObject(parsedLatestRelease)
                 ? {
                       name: parsedLatestRelease.name as string,
                       publishedAt: DateTime.fromISO(
@@ -153,14 +160,21 @@ export function fromDbObject(
                 : undefined,
             updatedAt: DateTime.fromISO(row.updatedAt as string).toUTC(),
             importedAt: DateTime.fromISO(row.importedAt as string).toUTC(),
-            languages: row.languages ? JSON.parse(row.languages as string) : [],
+            languages: row.languages
+                ? (JSON.parse(row.languages as string) as string[])
+                : [],
         });
 
-        for (const link of parsedFundingLinks) {
-            repo.fundingLinks.push({
-                url: convertStringToURL(link.url),
-                platform: link.platform,
-            });
+        if (parsedFundingLinks && Array.isArray(parsedFundingLinks)) {
+            for (const link of parsedFundingLinks) {
+                repo.fundingLinks.push({
+                    url: convertStringToURL(link.url),
+                    platform:
+                        GitHub.FundingPlatform[
+                            link.platform as keyof typeof GitHub.FundingPlatform
+                        ],
+                });
+            }
         }
         return ok(repo);
     } catch (error) {
