@@ -1,7 +1,15 @@
 import { VaultError } from "@/errors";
-import { ResultAsync, errAsync, okAsync } from "neverthrow";
+import {
+    Err,
+    Ok,
+    type Result,
+    ResultAsync,
+    err,
+    errAsync,
+    okAsync,
+} from "neverthrow";
 import normalizeUrl from "normalize-url";
-import type { DataWriteOptions, Vault } from "obsidian";
+import type { DataWriteOptions, TAbstractFile, TFolder, Vault } from "obsidian";
 
 export function convertStringToURL(url: string): URL {
     return new URL(normalizeUrl(url, { defaultProtocol: "https" }));
@@ -55,6 +63,21 @@ export function removeFile(vault: Vault, path: string) {
     );
 }
 
+export function renameFolder(vault: Vault, folder: TFolder, newPath: string) {
+    return ResultAsync.fromThrowable(
+        (f: TAbstractFile, p: string) => vault.rename(f, p),
+        (error) => {
+            console.error(`ERROR. ${error}`);
+            return VaultError.UnableToRenameDestinationFolder;
+        },
+    )(folder, newPath);
+}
+
+export enum PluginLockError {
+    Locked = "Plugin is locked",
+    Execution = "Lock execution error",
+}
+
 export class PluginLock {
     private locked = false;
     private timeoutHandle: Timer | null = null;
@@ -89,18 +112,30 @@ export class PluginLock {
         }
     }
 
-    async run<T>(
-        fn: () => Promise<T>,
+    public async run<T, E>(
+        fn: () => Result<T, E> | ResultAsync<T, E> | Promise<T>,
         timeoutMs?: number,
-    ): Promise<T | undefined> {
+    ): Promise<Result<T, E | PluginLockError>> {
         using lock = this.acquire(timeoutMs);
-        if (!lock) return; // Lock already acquired
+        if (!lock) return err(PluginLockError.Locked); // Lock already acquired
 
         try {
-            return await fn();
+            const result = fn();
+
+            if (result instanceof ResultAsync) {
+                return await result.mapErr((e) => e as E | PluginLockError);
+            }
+            if (result instanceof Ok || result instanceof Err) {
+                return result.mapErr((e) => e as E | PluginLockError);
+            }
+            // If `fn` returns a Promise<T>, wrap it in ResultAsync
+            return await ResultAsync.fromPromise(
+                result,
+                () => PluginLockError.Execution,
+            );
         } catch (error) {
             console.error("Lock execution error:", error);
-            throw error; // Rethrow the error so it propagates properly
+            return err(PluginLockError.Execution);
         }
     }
 }
