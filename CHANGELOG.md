@@ -1,6 +1,56 @@
 # Changelog
 
 ---
+## [0.3.0](https://github.com/vovanbo/obsidian-github-stars/compare/0.2.0..0.3.0) - 2025-02-27
+
+### Bug Fixes
+
+- Fix serialization bug in storage - ([451d5cb](https://github.com/vovanbo/obsidian-github-stars/commit/451d5cbcfdb4aec07104046f67dd56f152c1c3e1)) - Vladimir Bolshakov
+
+### Features
+
+- Add support for change destination folder in settings - ([66dae04](https://github.com/vovanbo/obsidian-github-stars/commit/66dae04747ccf71b1bae60c87430db74b2cd0a23)) - Vladimir Bolshakov
+- Add helpers to check types and values - ([483f3e6](https://github.com/vovanbo/obsidian-github-stars/commit/483f3e69592735e686c0000f5e2ddcafaaaf67ac)) - Vladimir Bolshakov
+- Add neverthrow support in plugin lock function - ([614a58b](https://github.com/vovanbo/obsidian-github-stars/commit/614a58b9e3b8693aca2542161d235868436271a2)) - Vladimir Bolshakov
+
+### Miscellaneous
+
+- Use isUndefined helpers in build - ([73f02cb](https://github.com/vovanbo/obsidian-github-stars/commit/73f02cb595a8079208d54311b38ad230a6dc2c4e)) - Vladimir Bolshakov
+- Use setTooltip in settings - ([ac59bc1](https://github.com/vovanbo/obsidian-github-stars/commit/ac59bc14e247e030951109b31af2f4a901bf51b7)) - Vladimir Bolshakov
+- Add TypeScript module declarations for *.gql and *.hbs - ([d531997](https://github.com/vovanbo/obsidian-github-stars/commit/d53199734873ea3da94acad49d003e0588aa5808)) - Vladimir Bolshakov
+
+### Refactoring
+
+- Use helpers in SQLite database module - ([10ad7c2](https://github.com/vovanbo/obsidian-github-stars/commit/10ad7c2c3c769ff167fa51bdd58ca95d213fb0a3)) - Vladimir Bolshakov
+- Use ResultAsync in storage methods - ([8d73ff6](https://github.com/vovanbo/obsidian-github-stars/commit/8d73ff65338f8b62617089f4c43eb9b30168be0f)) - Vladimir Bolshakov
+- Use neverthrow in GitHub service - ([4618c74](https://github.com/vovanbo/obsidian-github-stars/commit/4618c742ba77694bc35592a1497c74de80fdc725)) - Vladimir Bolshakov
+- Use helpers in API methods - ([75bfc4f](https://github.com/vovanbo/obsidian-github-stars/commit/75bfc4fa4cf169d76a144bea60afd2891302caee)) - Vladimir Bolshakov
+- Use new project structure in plugin module - ([eece182](https://github.com/vovanbo/obsidian-github-stars/commit/eece1823e4d18901794db1084c92bb445ef21002)) - Vladimir Bolshakov
+- Move stuff related to settings - ([8ff7bf1](https://github.com/vovanbo/obsidian-github-stars/commit/8ff7bf13048f043896ff475a2e06f59624ff6a3a)) - Vladimir Bolshakov
+- Introduce plugin API module - ([3613ef7](https://github.com/vovanbo/obsidian-github-stars/commit/3613ef754fe2864240ab9de252728e1495116826)) - Vladimir Bolshakov
+- Move storage to submodule - ([9816d02](https://github.com/vovanbo/obsidian-github-stars/commit/9816d020c438c8e9675024eb261c98f2d023e6af)) - Vladimir Bolshakov
+- Move GitHub service into submodule - ([db8fd8c](https://github.com/vovanbo/obsidian-github-stars/commit/db8fd8c189abe6c7bf7acc49153da7a14a89dfa2)) - Vladimir Bolshakov
+- Add vault related helpers to utils - ([3006714](https://github.com/vovanbo/obsidian-github-stars/commit/3006714099cb198bedc1edfb3b0d455ef1e4342e)) - Vladimir Bolshakov
+- Move SQLite DB to submodule - ([b4af38b](https://github.com/vovanbo/obsidian-github-stars/commit/b4af38b811ae19bb0b41819fffb4b7b57d990aab)) - Vladimir Bolshakov
+- Move templates to Handlebars files - ([d6f64e3](https://github.com/vovanbo/obsidian-github-stars/commit/d6f64e35be9e40f672e90f0c0b90e7908d2f1796)) - Vladimir Bolshakov
+- Move SQL queries from module to separate files - ([9022fb3](https://github.com/vovanbo/obsidian-github-stars/commit/9022fb38bb06eaefeb7290e520be12dd870409f4)) - Vladimir Bolshakov
+
+### Style
+
+- Fix misprint - ([b413c6c](https://github.com/vovanbo/obsidian-github-stars/commit/b413c6c6cde59f20a2af0c56793180b6c34b486d)) - Vladimir Bolshakov
+- Reformat create schema query - ([46660c1](https://github.com/vovanbo/obsidian-github-stars/commit/46660c1ff86f1663a762cc195985b873636354d5)) - Vladimir Bolshakov
+- Setup GraphQL formatting - ([dab3acc](https://github.com/vovanbo/obsidian-github-stars/commit/dab3acc6c097a4687f45832c424f773f0cdfd5ac)) - Vladimir Bolshakov
+
+### Build
+
+- Update Bun to 1.2.4 - ([efd254c](https://github.com/vovanbo/obsidian-github-stars/commit/efd254c170104fdddca0b528de176e245347536f)) - Vladimir Bolshakov
+- Add build plugins to handle imports of GraphQL queries and Handlebars templates - ([54120e4](https://github.com/vovanbo/obsidian-github-stars/commit/54120e4ce681598756b12f20f1900fe3d5b37166)) - Vladimir Bolshakov
+- Fix bug with resolving paths in Bun build plugins - ([3c940a2](https://github.com/vovanbo/obsidian-github-stars/commit/3c940a29216847070dad7c761dae828ac771ba0a)) - Vladimir Bolshakov
+- Write source maps in build only in debug mode - ([f21edc4](https://github.com/vovanbo/obsidian-github-stars/commit/f21edc493e261429bb4c25df939ddd918c062176)) - Vladimir Bolshakov
+- Exit with error when bump version or release failed - ([b479001](https://github.com/vovanbo/obsidian-github-stars/commit/b4790011326d08fad6cc9fd8479b39052c25c47d)) - Vladimir Bolshakov
+- Add support to import SQL files - ([fa9e478](https://github.com/vovanbo/obsidian-github-stars/commit/fa9e4781923714614283dd036ff00df3f6771204)) - Vladimir Bolshakov
+
+---
 ## [0.2.0](https://github.com/vovanbo/obsidian-github-stars/compare/0.1.2..0.2.0) - 2025-02-24
 
 ### Features
