@@ -1,4 +1,4 @@
-import type { VaultError } from "@/errors";
+import { Code, PluginError } from "@/errors";
 import { isNull, isUndefined } from "@/helpers";
 import indexPageByDaysTemplate from "@/templates/indexPageByDays.hbs";
 import indexPageByLanguagesTemplate from "@/templates/indexPageByLanguages.hbs";
@@ -10,7 +10,6 @@ import { Stream, set } from "itertools-ts";
 import { DateTime } from "luxon";
 import { ResultAsync, ok } from "neverthrow";
 import type { DataWriteOptions, FileManager, TFile, Vault } from "obsidian";
-import { PluginApiError } from "./errors";
 
 export const emptyPage = `<!-- GITHUB-STARS-START -->
 
@@ -35,18 +34,21 @@ export class GithubStarsPluginApi {
         contentFn: (data: string) => string,
         frontMatterFn: (frontmatter: unknown) => void,
         options?: DataWriteOptions,
-    ) {
-        const processContent = ResultAsync.fromPromise(
-            this.vault.process(file, contentFn, options),
-            () => PluginApiError.ProcessingFailed,
+    ): ResultAsync<string, PluginError<Code.Api>> {
+        const processContent = ResultAsync.fromThrowable(
+            (f: TFile, fn: (data: string) => string, o?: DataWriteOptions) =>
+                this.vault.process(f, fn, o),
+            () => new PluginError(Code.Api.ProcessingFailed),
         );
-        const processFrontMatter = ResultAsync.fromPromise(
-            this.fileManager.processFrontMatter(file, frontMatterFn, options),
-            () => PluginApiError.ProcessingFailed,
+        const processFrontMatter = ResultAsync.fromThrowable(
+            // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+            (f: TFile, fn: (frontmatter: any) => void, o?: DataWriteOptions) =>
+                this.fileManager.processFrontMatter(f, fn, o),
+            () => new PluginError(Code.Api.ProcessingFailed),
         );
         return ResultAsync.combine([
-            processContent,
-            processFrontMatter,
+            processContent(file, contentFn, options),
+            processFrontMatter(file, frontMatterFn, options),
         ]).andThen(([result]) => ok(result));
     }
 
@@ -62,7 +64,7 @@ export class GithubStarsPluginApi {
         destinationFolder: string,
         repostioriesFolder: string,
         filename: string,
-    ): ResultAsync<string, PluginApiError | VaultError> {
+    ): ResultAsync<string, PluginError<Code.Any>> {
         const reposByDates = new Map<
             number,
             Map<number, Map<number, GitHub.Repository[]>>
@@ -143,7 +145,7 @@ export class GithubStarsPluginApi {
         destinationFolder: string,
         repostioriesFolder: string,
         filename: string,
-    ): ResultAsync<string, PluginApiError | VaultError> {
+    ): ResultAsync<string, PluginError<Code.Any>> {
         const sortedMainLanguages = set.distinct(
             repos.map((r) => r.mainLanguage).sort(),
         );
@@ -196,7 +198,7 @@ export class GithubStarsPluginApi {
         destinationFolder: string,
         repostioriesFolder: string,
         filename: string,
-    ): ResultAsync<string, PluginApiError | VaultError> {
+    ): ResultAsync<string, PluginError<Code.Any>> {
         const owners = repos.map((r) => r.owner);
         const alphaSort = (a: string, b: string) =>
             a.toLowerCase().localeCompare(b.toLowerCase());
@@ -270,11 +272,11 @@ export class GithubStarsPluginApi {
         progressCallback: (createdPages: number, updatedPages: number) => void,
     ): ResultAsync<
         { createdPages: number; updatedPages: number },
-        PluginApiError | VaultError
+        PluginError<Code.Any>
     > {
         let createdPages = 0;
         let updatedPages = 0;
-        const results: ResultAsync<string, PluginApiError | VaultError>[] = [];
+        const results: ResultAsync<string, PluginError<Code.Any>>[] = [];
 
         for (const repo of repos) {
             const processContent = (data: string) =>
