@@ -1,3 +1,4 @@
+import { Code, PluginError } from "@/errors";
 import { isObject } from "@/helpers";
 import type { GitHubGraphQl } from "@/services/github/types";
 import { GitHub } from "@/types";
@@ -9,7 +10,7 @@ import type { ParamsObject } from "sql.js";
 
 export function fromGraphQlData(
     edge: GitHubGraphQl.StarredRepositoryEdge,
-): Result<GitHub.Repository, unknown> {
+): Result<GitHub.Repository, PluginError<Code.Serialization>> {
     try {
         const node = edge.node;
         const repo = new GitHub.Repository({
@@ -88,7 +89,7 @@ export function fromGraphQlData(
 
         return ok(repo);
     } catch (error) {
-        return err(error);
+        return err(new PluginError(Code.Serialization.GraphQL));
     }
 }
 
@@ -99,7 +100,7 @@ type ParsedFundingLink = {
 
 export function fromDbObject(
     row: ParamsObject,
-): Result<GitHub.Repository, unknown> {
+): Result<GitHub.Repository, PluginError<Code.Serialization>> {
     try {
         const parsedLatestRelease = row.latestRelease
             ? JSON.parse(row.latestRelease as string)
@@ -178,6 +179,6 @@ export function fromDbObject(
         }
         return ok(repo);
     } catch (error) {
-        return err(error);
+        return err(new PluginError(Code.Serialization.Database));
     }
 }
