@@ -1,5 +1,5 @@
 import sqlWasm from "!/sql.js/dist/sql-wasm.wasm";
-import { SqliteDatabaseError } from "@/db/errors";
+import { Code, PluginError } from "@/errors";
 import { isUndefined } from "@/helpers";
 import {
     type Result,
@@ -9,7 +9,7 @@ import {
     ok,
     okAsync,
 } from "neverthrow";
-import type { DataAdapter } from "obsidian";
+import type { DataAdapter, DataWriteOptions } from "obsidian";
 import type { Database } from "sql.js";
 import initSqlJs from "sql.js";
 
@@ -37,9 +37,9 @@ export class SqliteDatabase {
         );
     }
 
-    public get instance(): Result<Database, SqliteDatabaseError> {
+    public get instance(): Result<Database, PluginError<Code.Sqlite>> {
         if (!this.isInitialized) {
-            return err(SqliteDatabaseError.DatabaseIsNotInitialized);
+            return err(new PluginError(Code.Sqlite.DatabaseIsNotInitialized));
         }
 
         return ok(this.db as Database);
@@ -47,10 +47,13 @@ export class SqliteDatabase {
 
     private initSqlModule() {
         if (isUndefined(this.SQL)) {
-            return ResultAsync.fromPromise(
-                initSqlJs({ wasmBinary: sqlWasm.buffer as ArrayBuffer }),
-                () => SqliteDatabaseError.ModuleInitializationFailed,
-            ).map((SQL) => {
+            const initModule = ResultAsync.fromThrowable(
+                initSqlJs,
+                () => new PluginError(Code.Sqlite.ModuleInitializationFailed),
+            );
+            return initModule({
+                wasmBinary: sqlWasm.buffer as ArrayBuffer,
+            }).map((SQL) => {
                 this.SQL = SQL;
                 return SQL;
             });
@@ -59,12 +62,12 @@ export class SqliteDatabase {
     }
 
     private getOrCreateDbInstance() {
-        const readDbFile = ResultAsync.fromPromise(
-            this.adapter.readBinary(this.dbFilePath),
-            () => SqliteDatabaseError.FileIsNotExists,
+        const readDbFile = ResultAsync.fromThrowable(
+            (normalizedPath: string) => this.adapter.readBinary(normalizedPath),
+            () => new PluginError(Code.Sqlite.FileIsNotExists),
         );
         return this.initSqlModule().andThen((SQL) =>
-            readDbFile
+            readDbFile(this.dbFilePath)
                 .map((data) => new SQL.Database(Buffer.from(data)))
                 .orElse(() => ok(new SQL.Database())),
         );
@@ -73,7 +76,7 @@ export class SqliteDatabase {
     public init(
         dbFolder: string,
         dbFile: string,
-    ): ResultAsync<Database, SqliteDatabaseError> {
+    ): ResultAsync<Database, PluginError<Code.Sqlite>> {
         if (this.isInitialized) {
             return okAsync(this.db as Database);
         }
@@ -92,30 +95,41 @@ export class SqliteDatabase {
             });
     }
 
-    public save(): ResultAsync<void, SqliteDatabaseError> {
+    public save(): ResultAsync<void, PluginError<Code.Sqlite>> {
         if (!this.isInitialized) {
-            return errAsync(SqliteDatabaseError.DatabaseIsNotInitialized);
+            return errAsync(
+                new PluginError(Code.Sqlite.DatabaseIsNotInitialized),
+            );
         }
+
+        const saveDbData = ResultAsync.fromThrowable(
+            (
+                normalizedPath: string,
+                data: ArrayBuffer,
+                options?: DataWriteOptions,
+            ) => this.adapter.writeBinary(normalizedPath, data, options),
+            () => new PluginError(Code.Sqlite.DatabaseSaveFailed),
+        );
 
         return this.instance
             .map((db) => db.export().buffer as ArrayBuffer)
-            .asyncAndThen((data) =>
-                ResultAsync.fromPromise(
-                    this.adapter.writeBinary(this.dbFilePath, data),
-                    () => SqliteDatabaseError.DatabaseSaveFailed,
-                ),
-            );
+            .asyncAndThen((data) => saveDbData(this.dbFilePath, data));
     }
 
     public migrate() {
         if (!this.isInitialized) {
-            return errAsync(SqliteDatabaseError.DatabaseIsNotInitialized);
+            return errAsync(
+                new PluginError(Code.Sqlite.DatabaseIsNotInitialized),
+            );
         }
 
         // TODO Migrations
     }
 
-    public close(): ResultAsync<void, SqliteDatabaseError> {
+    public close(): ResultAsync<void, PluginError<Code.Sqlite>> {
+        if (!this.isInitialized) {
+            return okAsync();
+        }
         return this.instance.asyncMap(async (db) => {
             db.close();
             this.db = undefined;
