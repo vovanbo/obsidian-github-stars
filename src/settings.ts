@@ -1,4 +1,6 @@
+import { isUndefined } from "@/helpers";
 import type GithubStarsPlugin from "@/main";
+import { confirm } from "@/modals";
 import {
     type App,
     type Debouncer,
@@ -7,7 +9,6 @@ import {
     debounce,
     normalizePath,
 } from "obsidian";
-import { isUndefined } from "./helpers";
 
 export interface PluginSettings {
     pageSize: number;
@@ -47,6 +48,48 @@ export class SettingsTab extends PluginSettingTab {
         this.initSettings();
     }
 
+    async validateSettings(settings: Partial<PluginSettings>) {
+        const validSettings: Partial<PluginSettings> = {};
+        if (
+            !isUndefined(settings.accessToken) &&
+            this.plugin.settings.accessToken !== settings.accessToken
+        ) {
+            validSettings.accessToken = settings.accessToken;
+        }
+
+        if (
+            !isUndefined(settings.pageSize) &&
+            this.plugin.settings.pageSize !== settings.pageSize
+        ) {
+            validSettings.pageSize = settings.pageSize;
+            if (validSettings.pageSize < 1) {
+                validSettings.pageSize = 1;
+            }
+            if (validSettings.pageSize > 100) {
+                validSettings.pageSize = 100;
+            }
+        }
+
+        if (
+            !isUndefined(settings.destinationFolder) &&
+            this.plugin.settings.destinationFolder !==
+                settings.destinationFolder
+        ) {
+            const isRenameConfirmed = await confirm({
+                app: this.app,
+                title: "Rename destination folder?",
+                message: `Destination folder will be renamed from <pre>${this.plugin.settings.destinationFolder}</pre> to <pre>${settings.destinationFolder}</pre>`,
+                okButtonText: "Yes",
+                cancelButtonText: "No",
+            });
+            if (isRenameConfirmed) {
+                validSettings.destinationFolder = settings.destinationFolder;
+            }
+        }
+
+        return validSettings;
+    }
+
     async updateSettings(newSettings: Partial<PluginSettings>) {
         if (isUndefined(this.debouncedUpdateSettings)) {
             this.debouncedUpdateSettings = debounce(
@@ -56,7 +99,8 @@ export class SettingsTab extends PluginSettingTab {
                     this.pageSizeSetting?.setDisabled(true);
                     this.destinationFolderSetting?.setDisabled(true);
 
-                    await this.plugin.updateSettings(settings);
+                    const validSettings = await this.validateSettings(settings);
+                    await this.plugin.updateSettings(validSettings);
 
                     this.accessTokenSetting?.setDisabled(false);
                     this.pageSizeSetting?.setDisabled(false);
