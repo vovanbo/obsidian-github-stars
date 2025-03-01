@@ -1,4 +1,4 @@
-import { VaultError } from "@/errors";
+import { Code, PluginError } from "@/errors";
 import {
     Err,
     Ok,
@@ -9,22 +9,31 @@ import {
     okAsync,
 } from "neverthrow";
 import normalizeUrl from "normalize-url";
-import type { DataWriteOptions, TAbstractFile, TFolder, Vault } from "obsidian";
+import type {
+    DataWriteOptions,
+    TAbstractFile,
+    TFile,
+    TFolder,
+    Vault,
+} from "obsidian";
 
 export function convertStringToURL(url: string): URL {
     return new URL(normalizeUrl(url, { defaultProtocol: "https" }));
 }
 
-export function getOrCreateFolder(vault: Vault, path: string) {
+export function getOrCreateFolder(
+    vault: Vault,
+    path: string,
+): ResultAsync<TFolder, PluginError<Code.Vault>> {
     const folder = vault.getFolderByPath(path);
     if (folder) {
         return okAsync(folder);
     }
 
-    return ResultAsync.fromPromise(
-        vault.createFolder(path),
-        () => VaultError.CreateFolderFailed,
-    );
+    return ResultAsync.fromThrowable(
+        (p: string) => vault.createFolder(p),
+        () => new PluginError(Code.Vault.CreateFolderFailed),
+    )(path);
 }
 
 export function getOrCreateFile(
@@ -32,7 +41,7 @@ export function getOrCreateFile(
     path: string,
     content: string,
     options?: DataWriteOptions,
-) {
+): ResultAsync<{ file: TFile; isCreated: boolean }, PluginError<Code.Vault>> {
     const file = vault.getFileByPath(path);
     if (file) {
         return okAsync({
@@ -41,10 +50,12 @@ export function getOrCreateFile(
         });
     }
 
-    return ResultAsync.fromPromise(
-        vault.create(path, content, options),
-        () => VaultError.CreateFileFailed,
-    ).map((file) => {
+    const createFile = ResultAsync.fromThrowable(
+        (p: string, d: string, o?: DataWriteOptions) => vault.create(p, d, o),
+        () => new PluginError(Code.Vault.CreateFileFailed),
+    );
+
+    return createFile(path, content, options).map((file) => {
         return {
             file,
             isCreated: true,
@@ -52,30 +63,31 @@ export function getOrCreateFile(
     });
 }
 
-export function removeFile(vault: Vault, path: string) {
+export function removeFile(
+    vault: Vault,
+    path: string,
+    force?: boolean,
+): ResultAsync<void, PluginError<Code.Vault>> {
     const file = vault.getFileByPath(path);
     if (!file) {
-        return errAsync(VaultError.FileNotFound);
+        return errAsync(new PluginError(Code.Vault.FileNotFound));
     }
-    return ResultAsync.fromPromise(
-        vault.delete(file),
-        () => VaultError.FileCanNotBeRemoved,
-    );
+
+    return ResultAsync.fromThrowable(
+        (f: TAbstractFile, force?: boolean) => vault.delete(f, force),
+        () => new PluginError(Code.Vault.FileCanNotBeRemoved),
+    )(file, force);
 }
 
-export function renameFolder(vault: Vault, folder: TFolder, newPath: string) {
+export function renameFolder(
+    vault: Vault,
+    folder: TFolder,
+    newPath: string,
+): ResultAsync<void, PluginError<Code.Vault>> {
     return ResultAsync.fromThrowable(
         (f: TAbstractFile, p: string) => vault.rename(f, p),
-        (error) => {
-            console.error(`ERROR. ${error}`);
-            return VaultError.UnableToRenameDestinationFolder;
-        },
+        () => new PluginError(Code.Vault.UnableToRenameDestinationFolder),
     )(folder, newPath);
-}
-
-export enum PluginLockError {
-    Locked = "Plugin is locked",
-    Execution = "Lock execution error",
 }
 
 export class PluginLock {
@@ -115,27 +127,22 @@ export class PluginLock {
     public async run<T, E>(
         fn: () => Result<T, E> | ResultAsync<T, E> | Promise<T>,
         timeoutMs?: number,
-    ): Promise<Result<T, E | PluginLockError>> {
+    ): Promise<Result<T, E | PluginError<Code.Lock>>> {
         using lock = this.acquire(timeoutMs);
-        if (!lock) return err(PluginLockError.Locked); // Lock already acquired
+        if (!lock) return err(new PluginError(Code.Lock.Locked)); // Lock already acquired
 
-        try {
-            const result = fn();
+        const result = fn();
 
-            if (result instanceof ResultAsync) {
-                return await result.mapErr((e) => e as E | PluginLockError);
-            }
-            if (result instanceof Ok || result instanceof Err) {
-                return result.mapErr((e) => e as E | PluginLockError);
-            }
-            // If `fn` returns a Promise<T>, wrap it in ResultAsync
-            return await ResultAsync.fromPromise(
-                result,
-                () => PluginLockError.Execution,
-            );
-        } catch (error) {
-            console.error("Lock execution error:", error);
-            return err(PluginLockError.Execution);
+        if (result instanceof ResultAsync) {
+            return await result;
         }
+        if (result instanceof Ok || result instanceof Err) {
+            return result;
+        }
+        // If `fn` returns a Promise<T>, wrap it in ResultAsync
+        return await ResultAsync.fromThrowable(
+            () => result,
+            () => new PluginError(Code.Lock.Execution),
+        )();
     }
 }
