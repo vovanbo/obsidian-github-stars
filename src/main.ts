@@ -1,8 +1,7 @@
 import { GithubStarsPluginApi } from "@/api";
 import { SqliteDatabase } from "@/db/sqlite";
-import { VaultError } from "@/errors";
+import { Code, PluginError } from "@/errors";
 import { isEmpty, isMatch, isNull, isUndefined } from "@/helpers";
-import { confirm } from "@/modals";
 import { GithubRepositoriesService } from "@/services/github";
 import { DEFAULT_SETTINGS, type PluginSettings, SettingsTab } from "@/settings";
 import { StatusBar, StatusBarAction } from "@/statusBar";
@@ -16,7 +15,14 @@ import {
 } from "@/utils";
 import Handlebars from "handlebars";
 import { DateTime } from "luxon";
-import { ResultAsync, err, errAsync, ok, okAsync } from "neverthrow";
+import {
+    type Result,
+    ResultAsync,
+    err,
+    errAsync,
+    ok,
+    okAsync,
+} from "neverthrow";
 import { type App, Notice, Plugin, type PluginManifest } from "obsidian";
 
 export default class GithubStarsPlugin extends Plugin {
@@ -49,47 +55,32 @@ export default class GithubStarsPlugin extends Plugin {
         await this.loadSettings();
         this.addSettingTab(new SettingsTab(this.app, this));
         this.registerHandlebarsHelpers();
-
-        // TODO Move it to command callbacks (probably via decorator)
-        await getOrCreateFolder(this.app.vault, this.dbFolder);
-        const openStorageResult = await this.storage.init(
-            this.dbFolder,
-            this.settings.dbFileName,
-        );
-        if (openStorageResult.isErr()) {
-            console.error(openStorageResult.error);
-            new Notice(`ERROR. ${openStorageResult.error}`);
-            return;
-        }
-
         this.statusBar = new StatusBar(this.addStatusBarItem());
-        this.updateStats();
 
         this.addCommand({
             id: "full-sync",
             name: "Synchronize your starred repositories",
             callback: async () => {
-                const result = await this.lock.run(async () =>
-                    (await this.importDataToStorage())
-                        .asyncAndThen(() => this.storage.getRepositories())
+                const result = await this.lock.run(() => {
+                    const doImportDataToStorage = ResultAsync.fromPromise(
+                        this.importDataToStorage(),
+                        () => new PluginError(Code.Api.ImportFailed),
+                    ).andThen((result) => {
+                        if (result.isErr()) {
+                            return err(result.error);
+                        }
+                        return ok(result.value);
+                    });
+
+                    return this.prepareStorage()
+                        .andThen(() => doImportDataToStorage)
+                        .andThen(() => this.storage.getRepositories())
                         .andThen((repos) => this.createOrUpdatePages(repos))
                         .andTee(() => this.updateStats())
-                        .orElse((error) => {
-                            console.error(error);
-                            new Notice(`ERROR. ${error}`, 0);
-                            return err(error);
-                        }),
-                );
-                return result.match(
-                    () => {
-                        new Notice(
-                            "Done! GitHub stars was imported successfully.",
-                        );
-                    },
-                    (error) => {
-                        new Notice(`ERROR. ${error}`, 0);
-                    },
-                );
+                        .andThrough(() => this.storage.close())
+                        .orTee((error) => error.log().notice());
+                });
+                return result.orTee((error) => error.log().notice());
             },
         });
 
@@ -97,24 +88,15 @@ export default class GithubStarsPlugin extends Plugin {
             id: "create-pages",
             name: "Create pages",
             callback: async () => {
-                const result = await this.lock.run(async () => {
-                    return await this.storage
-                        .getRepositories()
+                const result = await this.lock.run(() => {
+                    return this.prepareStorage()
+                        .andThen((storage) => storage.getRepositories())
                         .andThen((repos) => this.createOrUpdatePages(repos))
-                        .orElse((error) => {
-                            console.error(error);
-                            new Notice(`ERROR. ${error}`, 0);
-                            return err(error);
-                        });
+                        .andTee(() => this.updateStats())
+                        .andThrough(() => this.storage.close())
+                        .orTee((error) => error.log().notice());
                 });
-                return result.match(
-                    () => {
-                        new Notice("Done! Pages was created successfully.");
-                    },
-                    (error) => {
-                        new Notice(`ERROR. ${error}`, 0);
-                    },
-                );
+                return result.orTee((error) => error.log().notice());
             },
         });
 
@@ -122,11 +104,20 @@ export default class GithubStarsPlugin extends Plugin {
             id: "remove-unstarred",
             name: "Remove unstarred repositories",
             callback: async () => {
-                const result = await this.lock.run(async () => {
-                    const removeResult = await (
-                        await this.storage.removeUnstarredRepositores()
-                    )
-                        .asyncAndThen((removedRepos) => {
+                const result = await this.lock.run(() => {
+                    const storageRemoveResult = ResultAsync.fromPromise(
+                        this.storage.removeUnstarredRepositores(),
+                        () => new PluginError(Code.Api.ProcessingFailed),
+                    ).andThen((result) => {
+                        if (result.isErr()) {
+                            return err(result.error);
+                        }
+                        return ok(result.value);
+                    });
+
+                    return this.prepareStorage()
+                        .andThen(() => storageRemoveResult)
+                        .andThrough((removedRepos) => {
                             // TODO: Add setting to handle removal of unstarred files
                             return ResultAsync.combine(
                                 removedRepos.map((repoName) => {
@@ -139,35 +130,12 @@ export default class GithubStarsPlugin extends Plugin {
                             );
                         })
                         .andTee(() => this.updateStats())
-                        .orElse((error) => {
-                            console.error(
-                                `Remove unstarred files error: ${error}`,
-                            );
-                            new Notice(`ERROR. ${error}`, 0);
-                            return err(error);
-                        });
-                    if (removeResult.isOk() && removeResult.value.length) {
-                        return await this.storage
-                            .getRepositories()
-                            .andThen((repos) => this.createOrUpdatePages(repos))
-                            .orElse((error) => {
-                                console.error(error);
-                                new Notice(`ERROR. ${error}`, 0);
-                                return err(error);
-                            });
-                    }
-                    return removeResult;
+                        .andThen(() => this.storage.getRepositories())
+                        .andThen((repos) => this.createOrUpdatePages(repos))
+                        .andThrough(() => this.storage.close())
+                        .orTee((error) => error.log().notice());
                 });
-                return result.match(
-                    () => {
-                        new Notice(
-                            "Done! Unstarred repositories was removed successfully.",
-                        );
-                    },
-                    (error) => {
-                        new Notice(`ERROR. ${error}`, 0);
-                    },
-                );
+                return result.orTee((error) => error.log().notice());
             },
         });
     }
@@ -185,13 +153,19 @@ export default class GithubStarsPlugin extends Plugin {
         );
     }
 
-    public saveSettings() {
+    public saveSettings(
+        newSettings: Partial<PluginSettings>,
+    ): ResultAsync<void, PluginError<Code.Vault>> {
+        if (isEmpty(newSettings) || isMatch(this.settings, newSettings)) {
+            console.debug("Nothing to save");
+            return okAsync();
+        }
+
+        this.settings = { ...this.settings, ...newSettings };
+
         return ResultAsync.fromThrowable(
             (settings) => this.saveData(settings),
-            (error) => {
-                console.error(`ERROR. ${error}`);
-                return VaultError.UnableToSaveSettings;
-            },
+            () => new PluginError(Code.Vault.UnableToSaveSettings),
         )(this.settings);
     }
 
@@ -228,7 +202,19 @@ export default class GithubStarsPlugin extends Plugin {
         Handlebars.unregisterHelper("searchLanguageUrl");
     }
 
-    private async importDataToStorage() {
+    private prepareStorage(): ResultAsync<
+        PluginStorage,
+        PluginError<Code.Vault> | PluginError<Code.Storage>
+    > {
+        return getOrCreateFolder(this.app.vault, this.dbFolder).andThen(
+            (dbFolder) =>
+                this.storage.init(dbFolder.path, this.settings.dbFileName),
+        );
+    }
+
+    private async importDataToStorage(): Promise<
+        Result<void, PluginError<Code.Any>>
+    > {
         const service = new GithubRepositoriesService(
             this.settings.accessToken,
         );
@@ -360,148 +346,69 @@ export default class GithubStarsPlugin extends Plugin {
                     statusBarActions.reposPages.stop().done();
                     return ok();
                 })
-                .orElse((error) => {
-                    new Notice(`ERROR. ${error}`, 0);
-                    statusBarActions.reposPages.stop().failed();
-                    return err(error);
-                }),
+                .orTee(() => statusBarActions.reposPages.stop().failed()),
             indexPageByDays
                 .andThen(() => {
                     new Notice("Index page by dates created!");
                     statusBarActions.indexByDays.stop().done();
                     return ok();
                 })
-                .orElse((error) => {
-                    new Notice(`ERROR. ${error}`, 0);
-                    statusBarActions.indexByDays.stop().failed();
-                    return err(error);
-                }),
+                .orTee(() => statusBarActions.indexByDays.stop().failed()),
             indexPageByLanguages
                 .andThen(() => {
                     new Notice("Index page by languages created!");
                     statusBarActions.indexByLanguages.stop().done();
                     return ok();
                 })
-                .orElse((error) => {
-                    new Notice(`ERROR. ${error}`, 0);
-                    statusBarActions.indexByLanguages.stop().failed();
-                    return err(error);
-                }),
+                .orTee(() => statusBarActions.indexByLanguages.stop().failed()),
             indexPageByOwners
                 .andThen(() => {
                     new Notice("Index page by owners created!");
                     statusBarActions.indexByOwners.stop().done();
                     return ok();
                 })
-                .orElse((error) => {
-                    new Notice(`ERROR. ${error}`, 0);
-                    statusBarActions.indexByOwners.stop().failed();
-                    return err(error);
-                }),
+                .orTee(() => statusBarActions.indexByOwners.stop().failed()),
         ])
             .andThen(() => ok())
-            .orElse((error) => {
-                console.error(error);
-                return err(error);
-            });
+            .orTee((error) => error.log().notice());
+    }
+
+    public renameDestinationFolder(
+        newPath: string,
+    ): ResultAsync<string, PluginError<Code.Vault>> {
+        const isNewDestinationFolderExists = !isNull(
+            this.app.vault.getFolderByPath(newPath),
+        );
+        if (isNewDestinationFolderExists) {
+            return errAsync(
+                new PluginError(Code.Vault.NewDestinationFolderIsExists),
+            );
+        }
+        const currentDestinationFolder = this.app.vault.getFolderByPath(
+            this.settings.destinationFolder,
+        );
+        if (isNull(currentDestinationFolder)) {
+            return errAsync(
+                new PluginError(Code.Vault.UnableToRenameDestinationFolder),
+            );
+        }
+
+        return renameFolder(
+            this.app.vault,
+            currentDestinationFolder,
+            newPath,
+        ).map(() => newPath);
     }
 
     public async updateSettings(settings: Partial<PluginSettings>) {
-        const result = await this.lock.run(async () => {
-            const newSettings: Partial<PluginSettings> = {};
-            if (
-                !isUndefined(settings.accessToken) &&
-                this.settings.accessToken !== settings.accessToken
-            ) {
-                newSettings.accessToken = settings.accessToken;
-            }
-
-            if (
-                !isUndefined(settings.pageSize) &&
-                this.settings.pageSize !== settings.pageSize
-            ) {
-                newSettings.pageSize = settings.pageSize;
-                if (newSettings.pageSize < 1) {
-                    newSettings.pageSize = 1;
+        const result = await this.lock.run(() => {
+            return this.saveSettings(settings).andThrough(() => {
+                if (isUndefined(settings.destinationFolder)) {
+                    return okAsync();
                 }
-                if (newSettings.pageSize > 100) {
-                    newSettings.pageSize = 100;
-                }
-            }
-
-            if (
-                !isUndefined(settings.destinationFolder) &&
-                this.settings.destinationFolder !== settings.destinationFolder
-            ) {
-                const isRenameConfirmed = await confirm({
-                    app: this.app,
-                    title: "Rename destination folder?",
-                    message: `Destination folder will be renamed from <pre>${this.settings.destinationFolder}</pre> to <pre>${settings.destinationFolder}</pre>`,
-                    okButtonText: "Yes",
-                    cancelButtonText: "No",
-                });
-                if (isRenameConfirmed) {
-                    newSettings.destinationFolder = settings.destinationFolder;
-                }
-            }
-
-            if (isEmpty(newSettings) || isMatch(this.settings, newSettings)) {
-                console.debug("Nothing to save");
-                return okAsync();
-            }
-
-            const saveSettings = () => {
-                this.settings = { ...this.settings, ...newSettings };
-                return this.saveSettings();
-            };
-
-            if (!isUndefined(newSettings.destinationFolder)) {
-                const isNewDestinationFolderExists = !isNull(
-                    this.app.vault.getFolderByPath(
-                        newSettings.destinationFolder,
-                    ),
-                );
-                if (isNewDestinationFolderExists) {
-                    return errAsync(VaultError.NewDestinationFolderIsExists);
-                }
-                const currentDestinationFolder = this.app.vault.getFolderByPath(
-                    this.settings.destinationFolder,
-                );
-                if (isNull(currentDestinationFolder)) {
-                    return errAsync(VaultError.UnableToRenameDestinationFolder);
-                }
-
-                return saveSettings()
-                    .andThen(() => this.storage.close())
-                    .andThen(() =>
-                        renameFolder(
-                            this.app.vault,
-                            currentDestinationFolder,
-                            newSettings.destinationFolder as string,
-                        ),
-                    )
-                    .andThen(() =>
-                        this.storage.init(
-                            this.dbFolder,
-                            this.settings.dbFileName,
-                        ),
-                    )
-                    .andThen(() => this.updateStats());
-            }
-
-            return saveSettings();
+                return this.renameDestinationFolder(settings.destinationFolder);
+            });
         });
-        return result.match(
-            (lockedResult) => {
-                return lockedResult.orElse((error) => {
-                    new Notice(`ERROR. ${error}`, 0);
-                    return err(error);
-                });
-            },
-            (lockError) => {
-                new Notice(`ERROR. ${lockError}`, 0);
-                return err(lockError);
-            },
-        );
+        return result.orTee((error) => error.log().notice());
     }
 }
