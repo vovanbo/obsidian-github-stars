@@ -1,7 +1,7 @@
+import { Code, PluginError } from "@/errors";
 import { Octokit } from "@octokit/core";
 import { retry } from "@octokit/plugin-retry";
 import { type Result, ResultAsync } from "neverthrow";
-import { GithubRepositoriesServiceError } from "./errors";
 import starredRepositoriesQuery from "./queries/starredRepositories.gql";
 import totalStarredRepositoriesCountQuery from "./queries/totalStarredRepositoriesCount.gql";
 import type { GitHubGraphQl } from "./types";
@@ -16,7 +16,7 @@ export interface StarredRepositoriesQueryResult {
 export type StarredRepositoriesGenerator = AsyncGenerator<
     Result<
         GitHubGraphQl.StarredRepositoryEdge[],
-        GithubRepositoriesServiceError
+        PluginError<Code.GithubService>
     >,
     void,
     unknown
@@ -30,7 +30,7 @@ export interface IGithubRepositoriesService {
 
     getTotalStarredRepositoriesCount(): ResultAsync<
         number,
-        GithubRepositoriesServiceError
+        PluginError<Code.GithubService>
     >;
 }
 
@@ -52,7 +52,7 @@ export class GithubRepositoriesService implements IGithubRepositoriesService {
         pageSize: number,
     ): ResultAsync<
         StarredRepositoriesQueryResult,
-        GithubRepositoriesServiceError
+        PluginError<Code.GithubService>
     > {
         const makeRequest = ResultAsync.fromPromise(
             this.client.graphql<GitHubGraphQl.StarredRepositoriesResponse>(
@@ -62,7 +62,7 @@ export class GithubRepositoriesService implements IGithubRepositoriesService {
                     pageSize,
                 },
             ),
-            () => GithubRepositoriesServiceError.RequestFailed,
+            () => new PluginError(Code.GithubService.RequestFailed),
         );
 
         return makeRequest.map((response) => {
@@ -100,13 +100,13 @@ export class GithubRepositoriesService implements IGithubRepositoriesService {
 
     public getTotalStarredRepositoriesCount(): ResultAsync<
         number,
-        GithubRepositoriesServiceError
+        PluginError<Code.GithubService>
     > {
         return ResultAsync.fromPromise(
             this.client.graphql<GitHubGraphQl.StarredRepositoriesResponse>(
                 totalStarredRepositoriesCountQuery,
             ),
-            () => GithubRepositoriesServiceError.RequestFailed,
+            () => new PluginError(Code.GithubService.RequestFailed),
         ).map((response) => response.viewer.starredRepositories.totalCount);
     }
 }
