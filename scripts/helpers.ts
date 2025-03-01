@@ -1,5 +1,5 @@
 import { $, type BunFile, type S3File } from "bun";
-import { ResultAsync, err, ok } from "neverthrow";
+import { ResultAsync, err, ok, okAsync } from "neverthrow";
 import type { PluginManifest } from "obsidian";
 import type { IPackageJson } from "package-json-type";
 import {
@@ -9,61 +9,75 @@ import {
     targetStylesFile,
     versionsFile,
 } from "./common";
-import { FileSystemError } from "./errors";
+import { Code, ScriptError } from "./errors";
 
 export const isUndefined = (val: unknown): val is undefined =>
     val === undefined;
 
 export function readJsonFile<T>(
     path: string | URL,
-): ResultAsync<T, FileSystemError> {
-    return ResultAsync.fromPromise(Bun.file(path).json(), (error) => {
-        console.error(`ERROR. ${error}`);
-        return FileSystemError.UnableToReadJsonFile;
-    });
+): ResultAsync<T, ScriptError<Code.FileSystem>> {
+    return ResultAsync.fromThrowable(
+        (p: typeof path) => Bun.file(p).json(),
+        (error) => new ScriptError(Code.FileSystem.UnableToReadJsonFile),
+    )(path);
 }
 
-export function readTextFile(path: string | URL) {
-    return ResultAsync.fromPromise(Bun.file(path).text(), (error) => {
-        console.error(`ERROR. ${error}`);
-        return FileSystemError.UnableToReadTextFile;
-    });
+export function readTextFile(
+    path: string | URL,
+): ResultAsync<string, ScriptError<Code.FileSystem>> {
+    return ResultAsync.fromThrowable(
+        (p: typeof path) => Bun.file(p).text(),
+        (error) => new ScriptError(Code.FileSystem.UnableToReadTextFile),
+    )(path);
 }
 
 export function writeFile(
     destination: BunFile | S3File | Bun.PathLike,
     data: Blob | NodeJS.TypedArray | ArrayBufferLike | string | Bun.BlobPart[],
-) {
-    return ResultAsync.fromPromise(Bun.write(destination, data), (error) => {
-        console.error(`ERROR. ${error}`);
-        return FileSystemError.UnableToWriteFile;
-    });
+): ResultAsync<number, ScriptError<Code.FileSystem>> {
+    return ResultAsync.fromThrowable(
+        (p: typeof destination, d: typeof data) => Bun.write(p, d),
+        (error) => new ScriptError(Code.FileSystem.UnableToWriteFile),
+    )(destination, data);
 }
 
-export function createFileIfNotExists(path: string, content: string) {
-    return ResultAsync.fromPromise(
-        Bun.file(path).exists(),
-        () => FileSystemError.FileSystemError,
-    ).andThen((isExists) => {
-        if (!isExists) {
-            console.log(`Creating ${path}`);
-            return writeFile(path, content);
+export function createFolder(
+    path: string,
+): ResultAsync<string, ScriptError<Code.FileSystem>> {
+    console.log(`Create folder ${path}`);
+    return ResultAsync.fromThrowable(
+        (path: string) => $`mkdir -p ${path}`,
+        () => new ScriptError(Code.FileSystem.FileSystemError),
+    )(path).map((shellOutput) => shellOutput.text());
+}
+
+export function createFileIfNotExists(path: string | URL, content: string) {
+    return ResultAsync.fromThrowable(
+        (p: typeof path) => Bun.file(p).exists(),
+        () => new ScriptError(Code.FileSystem.FileSystemError),
+    )(path).andThen((isExists) => {
+        if (isExists) {
+            return okAsync();
         }
-        return ok(undefined);
+        console.log(`Creating ${path}`);
+        return writeFile(path, content);
     });
 }
 
-export function removeFiles(paths: string[]) {
-    return ResultAsync.fromPromise(
-        $`rm -f ${{ raw: paths.join(" ") }}`,
-        (error) => {
-            console.error(`ERROR. ${error}`);
-            return FileSystemError.FileSystemError;
-        },
-    );
+export function removeFiles(
+    paths: string[],
+): ResultAsync<string, ScriptError<Code.FileSystem>> {
+    return ResultAsync.fromThrowable(
+        (pths: typeof paths) => $`rm -f ${{ raw: pths.join(" ") }}`,
+        (error) => new ScriptError(Code.FileSystem.FileSystemError),
+    )(paths).map((shellOutput) => shellOutput.text());
 }
 
-export function getVersionsFromPackageMetadata() {
+export function getVersionsFromPackageMetadata(): ResultAsync<
+    { targetVersion: string | undefined; minAppVersion: string },
+    ScriptError<Code.FileSystem>
+> {
     console.log(`Reading ${packageFile}`);
     return readJsonFile<IPackageJson>(packageFile).andThen((pkg) => {
         try {
@@ -72,8 +86,9 @@ export function getVersionsFromPackageMetadata() {
                 minAppVersion: pkg.obsidianMinAppVersion as string,
             });
         } catch (error) {
-            console.error(`ERROR. ${error}`);
-            return err(FileSystemError.UnableToReadPackageMetadata);
+            return err(
+                new ScriptError(Code.FileSystem.UnableToReadPackageMetadata),
+            );
         }
     });
 }
@@ -82,7 +97,10 @@ export function updateManifestFile(
     targetVersion: string,
     minAppVersion: string,
     destinationFolder = ".",
-) {
+): ResultAsync<
+    { targetVersion: string; minAppVersion: string },
+    ScriptError<Code.FileSystem>
+> {
     console.log("Reading manifest");
     const readManifest = readJsonFile<PluginManifest>(manifestFile);
     const manifestDestinationPath = `${destinationFolder}/${manifestFile}`;
@@ -97,10 +115,9 @@ export function updateManifestFile(
             );
         })
         .andThen(() => ok({ targetVersion, minAppVersion }))
-        .orElse((error) => {
-            console.error(`ERROR. ${error}`);
-            return err(FileSystemError.UnableToUpdateManifestFile);
-        });
+        .orElse((error) =>
+            err(new ScriptError(Code.FileSystem.UnableToUpdateManifestFile)),
+        );
 }
 
 export function updateVersionsFile(
@@ -120,10 +137,9 @@ export function updateVersionsFile(
             );
         })
         .andThen(() => ok({ targetVersion, minAppVersion }))
-        .orElse((error) => {
-            console.error(`ERROR. ${error}`);
-            return err(FileSystemError.UnableToUpdateVersionsFile);
-        });
+        .orElse((error) =>
+            err(new ScriptError(Code.FileSystem.UnableToUpdateVersionsFile)),
+        );
 }
 
 export function setupTestVault(
@@ -135,15 +151,7 @@ export function setupTestVault(
     const pluginFolderPath = `${obsidianFolderPath}/plugins/${pluginName}`;
 
     console.log("Creating test vault");
-    const makePluginFolder = ResultAsync.fromPromise(
-        $`mkdir -p ${pluginFolderPath}`,
-        (error) => {
-            console.error(`ERROR. ${error}`);
-            return FileSystemError.UnableToCreatePluginPath;
-        },
-    );
-
-    return makePluginFolder
+    return createFolder(pluginFolderPath)
         .andThen(() =>
             createFileIfNotExists(
                 `${obsidianFolderPath}/community-plugins.json`,
@@ -166,13 +174,10 @@ export function setupTestVault(
         )
         .andThen(() => {
             console.log("Copying plugin dist files");
-            return ResultAsync.fromPromise(
-                $`cp -r ${distFolderPath}/* ${pluginFolderPath}/`,
-                (error) => {
-                    console.error(`ERROR. ${error}`);
-                    return FileSystemError.FileSystemError;
-                },
-            );
+            return ResultAsync.fromThrowable(
+                (src: string, dst: string) => $`cp -r ${src}/* ${dst}/`,
+                (error) => new ScriptError(Code.FileSystem.FileSystemError),
+            )(distFolderPath, pluginFolderPath);
         })
         .andThen(() => getVersionsFromPackageMetadata())
         .andThrough(({ targetVersion, minAppVersion }) =>
@@ -181,9 +186,5 @@ export function setupTestVault(
                 minAppVersion,
                 pluginFolderPath,
             ),
-        )
-        .orElse((error) => {
-            console.error(`Test vault setup is failed. Reason: ${error}`);
-            return err(error);
-        });
+        );
 }

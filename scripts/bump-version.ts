@@ -1,22 +1,20 @@
 import { $ } from "bun";
 import { ResultAsync, err, okAsync } from "neverthrow";
 import type { IPackageJson } from "package-json-type";
-import { VersionError } from "./errors";
+import { Code, ScriptError } from "./errors";
 import { readJsonFile, writeFile } from "./helpers";
 
 export function bumpPackageVersion() {
     const packageFilePath = "package.json";
-    const nextVersion = ResultAsync.fromPromise(
-        $`git cliff --bumped-version --unreleased`.text(),
-        (error) => {
-            console.error(`ERROR ${error}`);
-            return VersionError.UnableToGetNextPackageVersion;
-        },
+    const nextVersion = ResultAsync.fromThrowable(
+        () => $`git cliff --bumped-version --unreleased`,
+        () => new ScriptError(Code.Version.UnableToGetNextPackageVersion),
     );
-    return nextVersion
+    return nextVersion()
+        .map((shellOutput) => shellOutput.text().trim())
         .andThen((newVersion) =>
             ResultAsync.combine([
-                okAsync(newVersion.trim()),
+                okAsync(newVersion),
                 readJsonFile<IPackageJson>(packageFilePath),
             ]),
         )
@@ -36,17 +34,13 @@ export function bumpPackageVersion() {
             metadata.version = newVersion;
             return writeFile(
                 packageFilePath,
-                JSON.stringify(metadata, null, 4),
+                JSON.stringify(metadata, null, 4) as string,
             );
         })
-        .andTee(() => console.log("Done!"))
-        .orElse((error) => {
-            console.error(`ERROR. ${error}`);
-            return err(VersionError.UnableToBumpPackageVersion);
-        });
+        .andTee(() => console.log("Done!"));
 }
 
 await bumpPackageVersion().orElse((error) => {
-    console.error(`Unable to bump version. Reason: ${error}`);
+    error.log();
     process.exit(1);
 });

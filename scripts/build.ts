@@ -1,18 +1,29 @@
-import path from "node:path";
 import { parseArgs } from "node:util";
 import builtins from "builtin-modules";
-import { $, type BunPlugin } from "bun";
-import { ResultAsync, okAsync } from "neverthrow";
+import {
+    $,
+    type BuildConfig,
+    type BuildOutput,
+    type BunFile,
+    type BunPlugin,
+} from "bun";
+import { ResultAsync, errAsync, okAsync } from "neverthrow";
 import type { IPackageJson } from "package-json-type";
 import { resolveTsPaths } from "resolve-tspaths";
 import { targetStylesFile } from "./common";
-import { BuildError, FileSystemError } from "./errors";
+import { Code, ScriptError } from "./errors";
 import {
+    createFolder,
+    isUndefined,
     readJsonFile,
     readTextFile,
     setupTestVault,
     writeFile,
 } from "./helpers";
+import { InlineGraphQlBunPlugin } from "./plugins/graphql";
+import { CompiledHandlebarsTemplateBunPlugin } from "./plugins/handlebars";
+import { InlineSqlBunPlugin } from "./plugins/sql";
+import { InlineWasmBunPlugin } from "./plugins/wasm";
 
 const { values: args } = parseArgs({
     args: Bun.argv,
@@ -37,112 +48,6 @@ const { values: args } = parseArgs({
 
 const outputFolder = "dist";
 
-export const InlineWasmBunPlugin: BunPlugin = {
-    name: "inline-wasm",
-    setup(builder) {
-        // Hook into the "resolve" phase to intercept .wasm imports
-        builder.onResolve({ filter: /\.wasm$/ }, async (args) => {
-            // Resolve the .wasm file path relative to the directory of the importing file
-            const resolvedPath = Bun.resolveSync(
-                args.path,
-                path.dirname(args.importer),
-            );
-            return { path: resolvedPath, namespace: "wasm" };
-        });
-
-        // Handle the .wasm file loading
-        builder.onLoad(
-            { filter: /\.wasm$/, namespace: "wasm" },
-            async (args) => {
-                const wasmFile = await Bun.file(args.path).bytes();
-                const wasm = Buffer.from(wasmFile).toString("base64");
-
-                // Create the inline WebAssembly module
-                const contents = `
-          const wasmBinary = Uint8Array.from(atob("${wasm}"), c => c.charCodeAt(0));
-          export default wasmBinary;
-        `;
-                return { contents, loader: "js" };
-            },
-        );
-    },
-};
-
-export const InlineSqlBunPlugin: BunPlugin = {
-    name: "inline-sql",
-    setup(builder) {
-        // Hook into the "resolve" phase to intercept .sql imports
-        builder.onResolve({ filter: /\.sql$/ }, async (args) => {
-            // Resolve the .sql file path relative to the directory of the importing file
-            const resolvedPath = Bun.resolveSync(
-                args.path,
-                path.dirname(args.importer),
-            );
-            return { path: resolvedPath, namespace: "sql" };
-        });
-
-        // Handle the .sql file loading
-        builder.onLoad({ filter: /\.sql$/, namespace: "sql" }, async (args) => {
-            const sqlFileContent = await Bun.file(args.path).text();
-            const contents = `const sqlQuery = \`${sqlFileContent}\`;
-            export default sqlQuery;`;
-            return { contents, loader: "js" };
-        });
-    },
-};
-
-export const InlineGraphQlBunPlugin: BunPlugin = {
-    name: "inline-graphql",
-    setup(builder) {
-        // Hook into the "resolve" phase to intercept .gql imports
-        builder.onResolve({ filter: /\.gql$/ }, async (args) => {
-            // Resolve the .gql file path relative to the directory of the importing file
-            const resolvedPath = Bun.resolveSync(
-                args.path,
-                path.dirname(args.importer),
-            );
-            return { path: resolvedPath, namespace: "graphql" };
-        });
-
-        // Handle the .gql file loading
-        builder.onLoad(
-            { filter: /\.gql$/, namespace: "graphql" },
-            async (args) => {
-                const graphQlQueryFileContent = await Bun.file(
-                    args.path,
-                ).text();
-                const contents = `const graphQlQuery = \`${graphQlQueryFileContent}\`;
-            export default graphQlQuery;`;
-                return { contents, loader: "js" };
-            },
-        );
-    },
-};
-
-export const CompiledHandlebarsTemplateBunPlugin: BunPlugin = {
-    name: "compile-handlebars",
-    setup(builder) {
-        builder.onResolve({ filter: /\.hbs$/ }, async (args) => {
-            const resolvedPath = Bun.resolveSync(
-                args.path,
-                path.dirname(args.importer),
-            );
-            return { path: resolvedPath, namespace: "handlebars" };
-        });
-
-        builder.onLoad(
-            { filter: /\.hbs$/, namespace: "handlebars" },
-            async (args) => {
-                const handlebarsFileContent = await Bun.file(args.path).text();
-                const contents = `import Handlebars from "handlebars";
-const graphQlQuery = Handlebars.compile(\`${handlebarsFileContent}\`, { strict: true });
-export default graphQlQuery;`;
-                return { contents, loader: "js" };
-            },
-        );
-    },
-};
-
 export interface WasmBuildConfig {
     target: "bundler" | "nodejs" | "web" | "no-modules" | "deno";
     path: string;
@@ -153,14 +58,14 @@ export function buildWasm(
         target: "web",
         path: "./pkg",
     },
-) {
+): ResultAsync<number, ScriptError<Code.Build | Code.FileSystem>> {
     console.log("Building Rust WASM");
-    const wasmPackBuild = ResultAsync.fromPromise(
-        $`wasm-pack build --target ${config.target}`,
-        () => BuildError.WasmPackBuildFailed,
+    const wasmPackBuild = ResultAsync.fromThrowable(
+        (target: string) => $`wasm-pack build --target ${target}`,
+        () => new ScriptError(Code.Build.WasmPackBuildFailed),
     );
     return (
-        wasmPackBuild
+        wasmPackBuild(config.target)
             .andThen(() =>
                 readJsonFile<IPackageJson>(`${config.path}/package.json`),
             )
@@ -180,7 +85,7 @@ export function buildWasm(
     );
 }
 
-export interface BuildConfig {
+export interface PluginBuildConfig {
     sourceFolder: string;
     entrypoints: {
         main: string;
@@ -202,95 +107,110 @@ const defaultBunPlugins = [
     CompiledHandlebarsTemplateBunPlugin,
 ];
 
-export function build(config: BuildConfig) {
-    const createOutputFolder = ResultAsync.fromPromise(
-        $`mkdir -p ${config.outputFolder}`,
-        (error) => {
-            console.error(`ERROR. ${error}`);
-            return FileSystemError.FileSystemError;
-        },
+export function buildStyles(
+    source: BunFile,
+    destination: BunFile,
+): ResultAsync<string, ScriptError<Code.Build>> {
+    console.log("Building styles");
+    return ResultAsync.fromThrowable(
+        (s: BunFile, d: BunFile) => $`grass ${s} --style compressed > ${d}`,
+        () => new ScriptError(Code.Build.UnableToBuildStylesFiles),
+    )(source, destination).map((shellOutput) => shellOutput.text());
+}
+
+export function buildJavaScript(
+    config: Partial<PluginBuildConfig>,
+): ResultAsync<BuildOutput, ScriptError<Code.Build>> {
+    if (isUndefined(config.entrypoints)) {
+        return errAsync(
+            new ScriptError(Code.Build.UnableToBuildJavaScriptFiles),
+        );
+    }
+
+    console.log(
+        `Building JavaScript: ${config.sourceFolder}/${config.entrypoints.main} (output: ${config.outputFolder})`,
     );
 
-    return createOutputFolder
+    const buildConfig: BuildConfig = {
+        entrypoints: [`${config.sourceFolder}/${config.entrypoints.main}`],
+        outdir: config.outputFolder,
+        minify: config.minify,
+        target: "browser",
+        format: config.format,
+        plugins: config.useWasm
+            ? [InlineWasmBunPlugin, ...defaultBunPlugins]
+            : defaultBunPlugins,
+        drop: config.drop,
+        sourcemap: config.sourcemap ? "inline" : "none",
+        external: [
+            "obsidian",
+            "electron",
+            "@electron/remote",
+            "@codemirror/autocomplete",
+            "@codemirror/collab",
+            "@codemirror/commands",
+            "@codemirror/language",
+            "@codemirror/lint",
+            "@codemirror/search",
+            "@codemirror/state",
+            "@codemirror/view",
+            "@lezer/common",
+            "@lezer/highlight",
+            "@lezer/lr",
+            ...builtins,
+        ],
+    };
+
+    return ResultAsync.fromThrowable(
+        (c: BuildConfig) => Bun.build(c),
+        (error) => new ScriptError(Code.Build.UnableToBuildJavaScriptFiles),
+    )(buildConfig);
+}
+
+export function buildTypeScriptDeclarations(
+    sourceFolder: string,
+    outputFolder: string,
+): ResultAsync<string, ScriptError<Code.Build>> {
+    console.log("Building types");
+    const buildDeclarations = ResultAsync.fromThrowable(
+        (folder: string) =>
+            $`bun tsc --noEmit false --emitDeclarationOnly --declaration --outDir ${folder}/types`,
+        () => new ScriptError(Code.Build.UnableToBuildTypesDeclarations),
+    );
+    const resolvePaths = ResultAsync.fromThrowable(
+        (src: string, out: string) =>
+            resolveTsPaths({
+                src,
+                out: `${out}/types`,
+            }),
+        (error) => new ScriptError(Code.Build.UnableToResolveTypeScriptPaths),
+    );
+    return buildDeclarations(outputFolder)
+        .andThrough(() => resolvePaths(sourceFolder, outputFolder))
+        .map((shellOutput) => shellOutput.text());
+}
+
+export function build(config: PluginBuildConfig) {
+    return createFolder(config.outputFolder)
         .andThrough(() => {
             if (config.wasmBuildConfig) {
                 return buildWasm(config.wasmBuildConfig);
             }
             return okAsync();
         })
-        .andThrough(() => {
-            console.log("Building styles");
-            return ResultAsync.fromPromise(
-                $`grass ${Bun.file(`${config.sourceFolder}/${config.entrypoints.styles}`)} --style compressed > ${Bun.file(`${config.outputFolder}/${targetStylesFile}`)}`,
-                (error) => {
-                    console.error(`ERROR. ${error}`);
-                    return BuildError.UnableToBuildStylesFiles;
-                },
-            );
-        })
-        .andThen(() => {
-            console.log(
-                `Building main: ${config.sourceFolder}/${config.entrypoints.main} (output: ${config.outputFolder})`,
-            );
-            return ResultAsync.fromPromise(
-                Bun.build({
-                    entrypoints: [
-                        `${config.sourceFolder}/${config.entrypoints.main}`,
-                    ],
-                    outdir: config.outputFolder,
-                    minify: config.minify,
-                    target: "browser",
-                    format: config.format,
-                    plugins: config.useWasm
-                        ? [InlineWasmBunPlugin, ...defaultBunPlugins]
-                        : defaultBunPlugins,
-                    drop: config.drop,
-                    sourcemap: config.sourcemap ? "inline" : "none",
-                    external: [
-                        "obsidian",
-                        "electron",
-                        "@electron/remote",
-                        "@codemirror/autocomplete",
-                        "@codemirror/collab",
-                        "@codemirror/commands",
-                        "@codemirror/language",
-                        "@codemirror/lint",
-                        "@codemirror/search",
-                        "@codemirror/state",
-                        "@codemirror/view",
-                        "@lezer/common",
-                        "@lezer/highlight",
-                        "@lezer/lr",
-                        ...builtins,
-                    ],
-                }),
-                (error) => {
-                    console.error(`ERROR. ${error}`);
-                    return BuildError.UnableToBuildJavaScriptFiles;
-                },
-            );
-        })
+        .andThrough(() =>
+            buildStyles(
+                Bun.file(`${config.sourceFolder}/${config.entrypoints.styles}`),
+                Bun.file(`${config.outputFolder}/${targetStylesFile}`),
+            ),
+        )
+        .andThen(() => buildJavaScript(config))
         .andThrough(() => {
             if (config.generateTypes) {
                 // Build typescript declaration files
-                console.log("Building types");
-                return ResultAsync.fromPromise(
-                    $`bun tsc --noEmit false --emitDeclarationOnly --declaration --outDir ${config.outputFolder}/types`,
-                    (error) => {
-                        console.error(`ERROR. ${error}`);
-                        return BuildError.UnableToBuildTypesDeclarations;
-                    },
-                ).andThrough(() =>
-                    ResultAsync.fromPromise(
-                        resolveTsPaths({
-                            src: config.sourceFolder,
-                            out: `${config.outputFolder}/types`,
-                        }),
-                        (error) => {
-                            console.error(`ERROR. ${error}`);
-                            return BuildError.UnableToResolveTypeScriptPaths;
-                        },
-                    ),
+                return buildTypeScriptDeclarations(
+                    config.sourceFolder,
+                    config.outputFolder,
                 );
             }
             return okAsync();
@@ -302,7 +222,8 @@ await build({
     entrypoints: { main: "main.ts", styles: "styles/index.scss" },
     outputFolder,
     format: "cjs",
-    drop: args.dev ? [] : ["console"],
+    // drop: args.dev ? [] : ["console"],
+    drop: [],
     generateTypes: false,
     useWasm: true,
     minify: !args["no-minify"],
@@ -320,6 +241,6 @@ await build({
     })
     .andTee(() => console.log("Done!"))
     .orElse((error) => {
-        console.error(`Build failed. Reason: ${error}`);
+        error.log();
         process.exit(1);
     });
