@@ -15,6 +15,7 @@ import schemaQuery from "@/db/queries/schema.sql";
 import type { SqliteDatabase } from "@/db/sqlite";
 import { Code, PluginError } from "@/errors";
 import type { StarredRepositoriesGenerator } from "@/services/github";
+import { DEFAULT_STATS } from "@/settings";
 import type { GitHub } from "@/types";
 import { single } from "itertools-ts";
 import { DateTime } from "luxon";
@@ -32,8 +33,17 @@ export type Stats = {
     starredCount: number;
     unstarredCount: number;
     lastRepoId?: string;
-    lastStarDate?: DateTime;
-    lastImportDate?: DateTime;
+};
+
+export type RemovedRepository = {
+    owner: string;
+    name: string;
+};
+
+export type ImportConfig = {
+    fullSync: boolean;
+    removeUnstarred: boolean;
+    lastRepoId?: string;
 };
 
 export class PluginStorage {
@@ -80,13 +90,13 @@ export class PluginStorage {
 
     public async import(
         repositoriesGen: StarredRepositoriesGenerator,
+        config: ImportConfig,
         progressCallback: (count: number) => void,
     ): Promise<Result<void, PluginError<Code.Any>>> {
         if (this.db.instance.isErr()) {
             return err(this.db.instance.error);
         }
 
-        const now = DateTime.utc();
         const db = this.db.instance.value;
 
         const licensesStmt = db.prepare(insertLicensesQuery);
@@ -100,9 +110,11 @@ export class PluginStorage {
             insertRepositoriesTopicsQuery,
         );
 
+        const now = DateTime.utc();
         const importedReposIds: Set<string> = new Set();
 
         let result: Result<void, PluginError<Code.Any>> = ok();
+        let stopImport = false;
         try {
             db.run("BEGIN TRANSACTION;");
             for await (const partResult of repositoriesGen) {
@@ -120,6 +132,16 @@ export class PluginStorage {
                     progressCallback(importedReposIds.size);
 
                     const repo = deserializationResult.value;
+
+                    if (
+                        !config.fullSync &&
+                        config.lastRepoId &&
+                        repo.id === config.lastRepoId
+                    ) {
+                        stopImport = true;
+                        break;
+                    }
+
                     if (repo.licenseInfo?.spdxId) {
                         licensesStmt.bind({
                             $spdxId: repo.licenseInfo.spdxId,
@@ -211,27 +233,29 @@ export class PluginStorage {
 
                     importedReposIds.add(repo.id);
                 }
-                if (result.isErr()) {
+                if (stopImport || result.isErr()) {
                     break;
                 }
             }
 
             if (result.isOk()) {
-                // Update unstarred repositories
-                const allReposIds = new Set(
-                    single.flatten(
-                        db.exec("SELECT id FROM repositories")[0].values,
-                    ),
-                );
-                const unstarredReposIds = allReposIds.difference(
-                    importedReposIds,
-                ) as Set<string>;
-
-                if (unstarredReposIds.size) {
-                    db.run(
-                        `UPDATE repositories SET unstarredAt = ? WHERE id IN ( ${[...unstarredReposIds].fill("?").join(",")} )`,
-                        [now.toISO(), ...unstarredReposIds],
+                if (config.fullSync) {
+                    // Update unstarred repositories
+                    const allReposIds = new Set(
+                        single.flatten(
+                            db.exec("SELECT id FROM repositories")[0].values,
+                        ),
                     );
+                    const unstarredReposIds = allReposIds.difference(
+                        importedReposIds,
+                    ) as Set<string>;
+
+                    if (unstarredReposIds.size) {
+                        db.run(
+                            `UPDATE repositories SET unstarredAt = ? WHERE id IN ( ${[...unstarredReposIds].fill("?").join(",")} )`,
+                            [now.toISO(), ...unstarredReposIds],
+                        );
+                    }
                 }
 
                 db.run("COMMIT;");
@@ -254,13 +278,7 @@ export class PluginStorage {
     }
 
     public getStats(): ResultAsync<Stats, PluginError<Code.Sqlite>> {
-        let result: Stats = {
-            starredCount: 0,
-            unstarredCount: 0,
-            lastRepoId: undefined,
-            lastStarDate: undefined,
-            lastImportDate: undefined,
-        };
+        let result = structuredClone(DEFAULT_STATS);
 
         return this.db.instance.asyncMap(async (db) => {
             const getStatsStmt = db.prepare(getStatsQuery);
@@ -277,16 +295,6 @@ export class PluginStorage {
                         : 0,
                     lastRepoId: statsResult.lastRepoId
                         ? (statsResult.lastRepoId as string)
-                        : undefined,
-                    lastStarDate: statsResult.lastStarDate
-                        ? DateTime.fromISO(
-                              statsResult.lastStarDate as string,
-                          ).toUTC()
-                        : undefined,
-                    lastImportDate: statsResult.lastImportDate
-                        ? DateTime.fromISO(
-                              statsResult.lastImportDate as string,
-                          ).toUTC()
                         : undefined,
                 };
             }
@@ -337,7 +345,7 @@ export class PluginStorage {
     }
 
     public removeUnstarredRepositores(): ResultAsync<
-        { owner: string; name: string }[],
+        RemovedRepository[],
         PluginError<Code.Any>
     > {
         if (this.db.instance.isErr()) {
@@ -348,9 +356,9 @@ export class PluginStorage {
         const removeUnstarredRepositoriesStmt = db.prepare(
             removeUnstarredRepositoriesQuery,
         );
-        const removedRepositories: { owner: string; name: string }[] = [];
+        const removedRepositories: RemovedRepository[] = [];
         let result: ResultAsync<
-            typeof removedRepositories,
+            RemovedRepository[],
             PluginError<Code.Any>
         > = okAsync(removedRepositories);
         try {

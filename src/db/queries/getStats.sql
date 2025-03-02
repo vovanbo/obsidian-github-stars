@@ -4,9 +4,7 @@ SELECT COUNT(id) FILTER (
   COUNT(id) FILTER (
     WHERE unstarredAt IS NOT NULL
   ) AS unstarredCount,
-  id AS lastRepoId,
-  starredAt AS lastStarDate,
-  importedAt AS lastImportDate
+  id AS lastRepoId
 FROM repositories
 ORDER BY starredAt DESC
 LIMIT 1;

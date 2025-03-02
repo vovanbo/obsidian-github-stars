@@ -1,6 +1,7 @@
 import { isUndefined } from "@/helpers";
 import type GithubStarsPlugin from "@/main";
 import { confirm } from "@/modals";
+import type { Stats } from "@/storage";
 import {
     type App,
     type Debouncer,
@@ -18,8 +19,15 @@ export interface PluginSettings {
     indexPageByDaysFileName: string;
     indexPageByLanguagesFileName: string;
     dbFileName: string;
+    stats: Stats;
     [key: string]: unknown;
 }
+
+export const DEFAULT_STATS: Stats = {
+    starredCount: 0,
+    unstarredCount: 0,
+    lastRepoId: undefined,
+};
 
 export const DEFAULT_SETTINGS: PluginSettings = {
     pageSize: 50,
@@ -29,6 +37,7 @@ export const DEFAULT_SETTINGS: PluginSettings = {
     indexPageByDaysFileName: "Stars by days.md",
     indexPageByLanguagesFileName: "Stars by languages.md",
     dbFileName: "stars.db",
+    stats: DEFAULT_STATS,
 };
 
 export class SettingsTab extends PluginSettingTab {

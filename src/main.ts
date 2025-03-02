@@ -2,10 +2,15 @@ import { GithubStarsPluginApi } from "@/api";
 import { SqliteDatabase } from "@/db/sqlite";
 import { Code, PluginError } from "@/errors";
 import { isEmpty, isMatch, isNull, isUndefined } from "@/helpers";
+import { confirm } from "@/modals";
 import { GithubRepositoriesService } from "@/services/github";
 import { DEFAULT_SETTINGS, type PluginSettings, SettingsTab } from "@/settings";
 import { StatusBar, StatusBarAction } from "@/statusBar";
-import { PluginStorage } from "@/storage";
+import {
+    type ImportConfig,
+    PluginStorage,
+    type RemovedRepository,
+} from "@/storage";
 import type { GitHub } from "@/types";
 import {
     PluginLock,
@@ -56,14 +61,48 @@ export default class GithubStarsPlugin extends Plugin {
         this.addSettingTab(new SettingsTab(this.app, this));
         this.registerHandlebarsHelpers();
         this.statusBar = new StatusBar(this.addStatusBarItem());
+        this.statusBar.updateStats(
+            this.settings.stats.starredCount,
+            this.settings.stats.unstarredCount,
+        );
 
         this.addCommand({
-            id: "full-sync",
+            id: "sync",
             name: "Synchronize your starred repositories",
             callback: async () => {
+                const config: ImportConfig = {
+                    fullSync: true,
+                    removeUnstarred: true,
+                    lastRepoId: this.settings.stats.lastRepoId,
+                };
+
+                const isFirstSync = isUndefined(this.settings.stats.lastRepoId);
+                // First sync will be always full
+                if (!isFirstSync) {
+                    config.fullSync = await confirm({
+                        app: this.app,
+                        title: "Do you want to make a full synchronization?",
+                        message:
+                            "Full sync will update all the data related to your starred repositories, but may take more significant time.",
+                        okButtonText: "Yes",
+                        cancelButtonText: "No",
+                    });
+
+                    if (config.fullSync) {
+                        config.removeUnstarred = await confirm({
+                            app: this.app,
+                            title: "Do you want to remove unstarred repositories?",
+                            message:
+                                'If you want to leave files related to unstarred repositories after import say "No". You can remove them later manually.',
+                            okButtonText: "Yes",
+                            cancelButtonText: "No",
+                        });
+                    }
+                }
+
                 const result = await this.lock.run(() => {
                     const doImportDataToStorage = ResultAsync.fromPromise(
-                        this.importDataToStorage(),
+                        this.importDataToStorage(config),
                         () => new PluginError(Code.Api.ImportFailed),
                     ).andThen((result) => {
                         if (result.isErr()) {
@@ -74,6 +113,12 @@ export default class GithubStarsPlugin extends Plugin {
 
                     return this.prepareStorage()
                         .andThen(() => doImportDataToStorage)
+                        .andThrough(() => {
+                            if (!config.removeUnstarred) {
+                                return okAsync();
+                            }
+                            return this.removeUnstarredRepositories();
+                        })
                         .andThen(() => this.storage.getRepositories())
                         .andThen((repos) => this.createOrUpdatePages(repos))
                         .andTee(() => this.updateStats())
@@ -85,8 +130,8 @@ export default class GithubStarsPlugin extends Plugin {
         });
 
         this.addCommand({
-            id: "create-pages",
-            name: "Create pages",
+            id: "update-pages",
+            name: "Update or create pages without sync",
             callback: async () => {
                 const result = await this.lock.run(() => {
                     return this.prepareStorage()
@@ -105,30 +150,8 @@ export default class GithubStarsPlugin extends Plugin {
             name: "Remove unstarred repositories",
             callback: async () => {
                 const result = await this.lock.run(() => {
-                    const storageRemoveResult = ResultAsync.fromPromise(
-                        this.storage.removeUnstarredRepositores(),
-                        () => new PluginError(Code.Api.ProcessingFailed),
-                    ).andThen((result) => {
-                        if (result.isErr()) {
-                            return err(result.error);
-                        }
-                        return ok(result.value);
-                    });
-
                     return this.prepareStorage()
-                        .andThen(() => storageRemoveResult)
-                        .andThrough((removedRepos) => {
-                            // TODO: Add setting to handle removal of unstarred files
-                            return ResultAsync.combine(
-                                removedRepos.map((repoName) => {
-                                    const unstarredRepoFilePath = `${this.repostioriesFolder}/${repoName.owner}/${repoName.name}.md`;
-                                    return removeFile(
-                                        this.app.vault,
-                                        unstarredRepoFilePath,
-                                    );
-                                }),
-                            );
-                        })
+                        .andThen(() => this.removeUnstarredRepositories())
                         .andTee(() => this.updateStats())
                         .andThen(() => this.storage.getRepositories())
                         .andThen((repos) => this.createOrUpdatePages(repos))
@@ -154,14 +177,16 @@ export default class GithubStarsPlugin extends Plugin {
     }
 
     public saveSettings(
-        newSettings: Partial<PluginSettings>,
+        newSettings?: Partial<PluginSettings>,
     ): ResultAsync<void, PluginError<Code.Vault>> {
-        if (isEmpty(newSettings) || isMatch(this.settings, newSettings)) {
-            console.debug("Nothing to save");
-            return okAsync();
-        }
+        if (!isUndefined(newSettings)) {
+            if (isEmpty(newSettings) || isMatch(this.settings, newSettings)) {
+                console.debug("Nothing to save");
+                return okAsync();
+            }
 
-        this.settings = { ...this.settings, ...newSettings };
+            this.settings = { ...this.settings, ...newSettings };
+        }
 
         return ResultAsync.fromThrowable(
             (settings) => this.saveData(settings),
@@ -212,9 +237,9 @@ export default class GithubStarsPlugin extends Plugin {
         );
     }
 
-    private async importDataToStorage(): Promise<
-        Result<void, PluginError<Code.Any>>
-    > {
+    private async importDataToStorage(
+        config: ImportConfig,
+    ): Promise<Result<void, PluginError<Code.Any>>> {
         const service = new GithubRepositoriesService(
             this.settings.accessToken,
         );
@@ -233,7 +258,7 @@ export default class GithubStarsPlugin extends Plugin {
         const statusBarAction = new StatusBarAction(
             this.statusBar as StatusBar,
             "download",
-            "0%",
+            config.fullSync ? "0%" : "",
         );
         statusBarAction.start();
         const repositoriesGen = service.getUserStarredRepositories(
@@ -241,10 +266,13 @@ export default class GithubStarsPlugin extends Plugin {
         );
         const result = await this.storage.import(
             repositoriesGen,
+            config,
             (count: number) => {
-                statusBarAction.updateState(
-                    `${Math.floor((count / totalCount) * 100)}%`,
-                );
+                if (config.fullSync) {
+                    statusBarAction.updateState(
+                        `${Math.floor((count / totalCount) * 100)}%`,
+                    );
+                }
             },
         );
 
@@ -264,13 +292,14 @@ export default class GithubStarsPlugin extends Plugin {
     private updateStats() {
         return this.storage
             .getStats()
-            .map((stats) =>
+            .map((stats) => {
+                this.settings.stats = stats;
                 this.statusBar?.updateStats(
                     stats.starredCount,
                     stats.unstarredCount,
-                ),
-            )
-            .andThen(() => ok())
+                );
+            })
+            .andThen(() => this.saveSettings())
             .orElse((error) => {
                 console.error(error);
                 return err(error);
@@ -373,7 +402,34 @@ export default class GithubStarsPlugin extends Plugin {
             .orTee((error) => error.log().notice());
     }
 
-    public renameDestinationFolder(
+    private removeUnstarredRepositories(
+        withFiles = true,
+    ): ResultAsync<RemovedRepository[], PluginError<Code.Any>> {
+        const storageRemoveResult = ResultAsync.fromPromise(
+            this.storage.removeUnstarredRepositores(),
+            () => new PluginError(Code.Api.ProcessingFailed),
+        ).andThen((result) => {
+            if (result.isErr()) {
+                return err(result.error);
+            }
+            return ok(result.value);
+        });
+
+        return storageRemoveResult.andThrough((removedRepos) => {
+            if (!withFiles) {
+                return okAsync();
+            }
+            return ResultAsync.combine(
+                removedRepos.map((repo) => {
+                    const unstarredRepoFilePath = `${this.repostioriesFolder}/${repo.owner}/${repo.name}.md`;
+                    return removeFile(this.app.vault, unstarredRepoFilePath);
+                }),
+            );
+        });
+    }
+
+    private renameDestinationFolder(
+        oldPath: string,
         newPath: string,
     ): ResultAsync<string, PluginError<Code.Vault>> {
         const isNewDestinationFolderExists = !isNull(
@@ -384,9 +440,8 @@ export default class GithubStarsPlugin extends Plugin {
                 new PluginError(Code.Vault.NewDestinationFolderIsExists),
             );
         }
-        const currentDestinationFolder = this.app.vault.getFolderByPath(
-            this.settings.destinationFolder,
-        );
+        const currentDestinationFolder =
+            this.app.vault.getFolderByPath(oldPath);
         if (isNull(currentDestinationFolder)) {
             return errAsync(
                 new PluginError(Code.Vault.UnableToRenameDestinationFolder),
@@ -401,12 +456,16 @@ export default class GithubStarsPlugin extends Plugin {
     }
 
     public async updateSettings(settings: Partial<PluginSettings>) {
+        const oldSettings = structuredClone(this.settings);
         const result = await this.lock.run(() => {
             return this.saveSettings(settings).andThrough(() => {
                 if (isUndefined(settings.destinationFolder)) {
                     return okAsync();
                 }
-                return this.renameDestinationFolder(settings.destinationFolder);
+                return this.renameDestinationFolder(
+                    oldSettings.destinationFolder,
+                    settings.destinationFolder,
+                );
             });
         });
         return result.orTee((error) => error.log().notice());
