@@ -1,6 +1,28 @@
 # Changelog
 
 ---
+## [0.4.0](https://github.com/vovanbo/obsidian-github-stars/compare/0.3.0..0.4.0) - 2025-03-02
+
+### Features
+
+- Add partial update of starred repositories - ([90d2fe9](https://github.com/vovanbo/obsidian-github-stars/commit/90d2fe9125954517db9d03a6ce6c9626bc68926f)) - Vladimir Bolshakov
+- Use SQLite database only when command is running - ([731c619](https://github.com/vovanbo/obsidian-github-stars/commit/731c619346eaa2bf96ec4b8252f28c40552d74f2)) - Vladimir Bolshakov
+- Use more strict error handling in plugin API - ([210d58d](https://github.com/vovanbo/obsidian-github-stars/commit/210d58d8a374ce6d9d61b0b9cc4ccbbd87b00808)) - Vladimir Bolshakov
+- Use more strict error handling in utils module - ([20ecaee](https://github.com/vovanbo/obsidian-github-stars/commit/20ecaee7503c241188fee39ad3527e9eb6f5bbc0)) - Vladimir Bolshakov
+- Use more strict error handling in Storage - ([08db62c](https://github.com/vovanbo/obsidian-github-stars/commit/08db62cc6adfd3c97af95ecca6d2876a405807e4)) - Vladimir Bolshakov
+- Use more strict error handling in GitHub service - ([b96c1dc](https://github.com/vovanbo/obsidian-github-stars/commit/b96c1dc35ff62480f67f6f631a8f7a54a705aba3)) - Vladimir Bolshakov
+- Use more strict error handling in SQLite DB - ([dad7150](https://github.com/vovanbo/obsidian-github-stars/commit/dad71505f8b400fef8bca3f269e45c02cc8a5b42)) - Vladimir Bolshakov
+- Implement unified error handling - ([ab83a1e](https://github.com/vovanbo/obsidian-github-stars/commit/ab83a1e4d3cd782a3cc9e2d02148c4c14b9348cf)) - Vladimir Bolshakov
+
+### Refactoring
+
+- Move settings validation into PluginSettings class - ([3e4e2f9](https://github.com/vovanbo/obsidian-github-stars/commit/3e4e2f95c74089eeeb10cbc5131ba8ad1c84373e)) - Vladimir Bolshakov
+
+### Build
+
+- Implement unified error handling in build/bump/release scripts - ([c28c213](https://github.com/vovanbo/obsidian-github-stars/commit/c28c213d1289d08458d7f920c2c3cb6863a66443)) - Vladimir Bolshakov
+
+---
 ## [0.3.0](https://github.com/vovanbo/obsidian-github-stars/compare/0.2.0..0.3.0) - 2025-02-27
 
 ### Bug Fixes
