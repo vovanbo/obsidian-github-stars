@@ -64,6 +64,11 @@ To generate a fine grained access token, follow these steps:
 7. Click on "Generate token".
 8. Copy generated token value and paste it into the plugin settings after plugin will be installed.
 
+![New Fine-grained Personal Access Token 2025-03-03 16-53-57](https://github.com/user-attachments/assets/21ed3b6b-f509-4416-ba8d-96c9ca3eb095)
+![New Fine-grained Personal Access Token 2025-03-03 16-54-57](https://github.com/user-attachments/assets/fb058389-07fd-48a8-8011-8b1dfd39f235)
+![New Fine-grained Personal Access Token 2025-03-03 16-55-19](https://github.com/user-attachments/assets/a3d09d1d-770c-45fe-9976-ec1d8e2e8660)
+![Fine-grained Personal Access Tokens 2025-03-03 16-55-51](https://github.com/user-attachments/assets/05a5b8d2-9795-4b4d-9371-31039fd12d7e)
+
 ### Installation
 
 You have two options to install this plugin:
