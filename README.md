@@ -8,7 +8,7 @@ This plugin for [Obsidian][Obsidian] imports your GitHub stars into your vault a
 
 ## Demo
 
-TODO
+[demo.webm](https://github.com/user-attachments/assets/da3bf715-c202-4e91-9457-4c1db8749f90)
 
 ## Use cases
 
