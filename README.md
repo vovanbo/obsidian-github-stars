@@ -2,9 +2,9 @@
 
 This plugin for [Obsidian][Obsidian] imports your GitHub stars into your vault as separate documents. So, when import is done you will be able to:
 - Create [internal links](https://help.obsidian.md/Editing+and+formatting/Basic+formatting+syntax#Internal%20links) to your starred repositories in your vault
-- See a history of your stars activity
-- Have a index of your starred repositories groupped by programming languages
-- Have a index groupped by owners of your starred repos
+- See a history of your stars on GitHub
+- Have a index of your starred repositories grouped by programming languages
+- Have a index grouped by owners of your starred repos
 
 ## Demo
 
@@ -47,16 +47,17 @@ TODO
 ## Roadmap to 1.0
 
 - [x] Automatically remove files related to removed stars
-- [ ] i18n
+- [x] Incremental update
 - [ ] Use Obsidian views to:
-    - [ ] Statistics
-    - [ ] Full text search
-    - [ ] Ratings
-- [ ] Incremental update
+    - [ ] Make a full text search
+    - [ ] Show statistics
+    - [ ] Show ratings
+- [ ] i18n / l10n
 - [ ] Fetch README file content on a starred repository page
-- [ ] Fetch owner's bio or organization information on owner's page
 - [ ] Global changes log
-- [ ] Highlight archived or deprecated/unmaintined repositories
+- [ ] Highlight archived, deprecated and unmaintained repositories
+- [ ] Customizable templates of pages
+- [ ] Test suite
 
 ## Implementation details
 
@@ -66,7 +67,10 @@ TODO
 - [SQL.js][SQL.js] (SQLite in browser via WASM)
 - [octokit.js][octokit.js] (API client for GitHub)
 - [Handlebars][Handlebars] (Templates for pages)
+- [neverthrow][neverthrow] (unified error handling and result types)
+- [luxon][luxon] (date and time library)
 - [Biome][Biome] (lint, format, etc)
+- [git-cliff][git-cliff] (bump versions and change log generation)
 
 ## Inspiration sources
 
@@ -80,4 +84,7 @@ TODO
 [Biome]: https://biomejs.dev/
 [SQL.js]: https://sql.js.org
 [octokit.js]: https://github.com/octokit/octokit.js
+[neverthrow]: https://github.com/softprops/neverthrow
+[luxon]: https://moment.github.io/luxon/
 [Handlebars]: https://handlebarsjs.com
+[git-cliff]: https://git-cliff.org/
