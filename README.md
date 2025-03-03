@@ -6,6 +6,16 @@ This plugin for [Obsidian][Obsidian] imports your GitHub stars into your vault a
 - Have a index of your starred repositories grouped by programming languages
 - Have a index grouped by owners of your starred repos
 
+## Table of contents
+
+- [Demo](#demo)
+- [Use cases](#use-cases)
+- [Features](#features)
+- [How to use](#how-to-use)
+- [Roadmap to 1.0](#roadmap-to-10)
+- [Implementation details](#implementation-details)
+- [Inspiration sources](#inspiration-sources)
+
 ## Demo
 
 [demo.webm](https://github.com/user-attachments/assets/da3bf715-c202-4e91-9457-4c1db8749f90)
@@ -140,6 +150,14 @@ updatedAt: <date>
 topics: <list of topics>
 ---
 ```
+
+#### Incremental update
+
+Documentation will be updated soon.
+
+#### Remove unstarred repositories
+
+Documentation will be updated soon.
 
 ## Roadmap to 1.0
 
