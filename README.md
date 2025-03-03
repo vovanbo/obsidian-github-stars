@@ -40,9 +40,106 @@ This plugin for [Obsidian][Obsidian] imports your GitHub stars into your vault a
 
 ## How to use
 
-- Install this plugin from community plugin list in Obsidian
-- [Create a fine grained access token](https://github.blog/security/application-security/introducing-fine-grained-personal-access-tokens-for-github/#creating-personal-access-tokens) on your GitHub account developer settings page
-- ..
+### Prepare
+
+To work with this plugin, you need to have a GitHub account and a fine grained access token.
+To generate a fine grained access token, follow these steps:
+
+1. Go to your GitHub account's [personal access tokens page](https://github.com/settings/personal-access-tokens).
+2. Click on "Generate new token".
+3. Confirm access if you have two-factor authentication enabled.
+4. Give your token a name.
+5. Setup expiration date (and optionally description).
+6. Select read-only access to "Starring" (see "Account permissions" settings).
+7. Click on "Generate token".
+8. Copy generated token value and paste it into the plugin settings after plugin will be installed.
+
+### Installation
+
+You have two options to install this plugin:
+1. Install this plugin from community plugin list in Obsidian.
+2. Use [BRAT][BRAT] plugin to use this plugin version directly from [GitHub](https://github.com/vovanbo/obsidian-github-stars/releases).
+
+### Usage
+
+#### First synchronization
+
+1. Open the plugin settings.
+2. Enter your GitHub token in "GitHub API access token" field (see a demo video above).
+3. Wait a second, and plugin will save your token to settings.
+4. Press `Cmd + P` (Mac) or `Ctrl + P` (Windows/Linux) to open the Obsidian command palette.
+5. Type "GitHub stars" and select plugin command `GitHub stars: Synchronize your starred repositories`.
+6. If API token is valid, plugin will start synchronization process. In dependence of count of your starred repositories it will take some time.
+For example, if you have around 2500 starred repositories, it will take about 5 minutes with page size set to `50`
+(about 5 seconds to request/response).
+The reason of this is that GitHub GraphQL API uses pagination to fetch data, which means that the plugin needs to make multiple requests to the API to retrieve all the data.
+By default page size is set to 50, but you can change it in the plugin settings.
+7. After synchronization is complete you will have a new folder with your starred repositories in your vault.
+Name of the folder is set to "GitHub" by default, but you can change it in the plugin settings too.
+8. Inside of this folder will be:
+    - `GitHub/db` subfolder. This is the place where plugin stores SQLite database with information about your starred repositories.
+    - `GitHub/repositories` subfolder. This is the place where plugin stores markdown files with information about your starred repositories.
+    Each repository will be placed in subfolder with its owner name. For example, star of this repository will be placed in file `GitHub/repositories/vovanbo/obsidian-github-stars.md`.
+    - Three index files:
+      - `Stars by days.md`. This file contains a list of all your starred repositories grouped by the day they were starred.
+      - `Stars by owners.md`. This file contains a list of all your starred repositories grouped by the owner of the repository.
+      - `Stars by languages.md`. This file contains a list of all your starred repositories grouped by the main programming language used in the repository.
+
+#### Structure of Markdown repository file
+
+##### Content
+
+Each repository file created from the empty file template that have the following structure:
+
+```
+<!-- GITHUB-STARS-START -->
+
+<!-- GITHUB-STARS-END -->
+
+---
+```
+
+Between the `<!-- GITHUB-STARS-START -->` and `<!-- GITHUB-STARS-END -->` tags will be placed generated content.
+So, don't edit content inside these tags manually.
+It will be overwritten on each update.
+Don't worry, these HTML comments are the valid Markdown syntax.
+
+Any of your notes related to this repository should be placed after horizontal rule line (`---`).
+They will be never touched by this plugin.
+
+That exactly will be placed inside tags you can see in the demo video above. In short:
+
+- Name of repository
+- URL to repository
+- Description of repository (if available)
+- Homepage URL
+- URL to repository owner page on GitHub
+- Information about latest release if available
+- List of programming languages used in the repository
+- Funding links (if available)
+
+##### Frontmatter
+
+Each repository Markdown page will have the following frontmatter:
+
+```
+---
+url: <repository URL>
+homepageUrl: <homepage URL>
+isArchived: <boolean>
+isFork: <boolean>
+isPrivate: <boolean>
+isTemplate: <boolean>
+stargazerCount: <number>
+forkCount: <number>
+createdAt: <date>
+importedAt: <date>
+pushedAt: <date>
+starredAt: <date>
+updatedAt: <date>
+topics: <list of topics>
+---
+```
 
 ## Roadmap to 1.0
 
@@ -88,3 +185,4 @@ This plugin for [Obsidian][Obsidian] imports your GitHub stars into your vault a
 [luxon]: https://moment.github.io/luxon/
 [Handlebars]: https://handlebarsjs.com
 [git-cliff]: https://git-cliff.org/
+[BRAT]: https://github.com/TfTHacker/obsidian42-brat
