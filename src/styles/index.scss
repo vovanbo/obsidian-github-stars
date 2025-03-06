@@ -16,8 +16,7 @@
   }
 }
 
-
-.plugin-obsidian-github-stars {
+.plugin-github-stars {
   padding: 0 var(--size-2-2);
 
   .logo {
@@ -78,10 +77,9 @@
       }
     }
   }
-
 }
 
-.obsidian-github-stars.settings {
+.github-stars.settings {
   opacity: 1;
   transition: opacity 0.5s;
 
@@ -90,7 +88,7 @@
   }
 }
 
-.obsidian-github-stars.modal-container {
+.github-stars.modal-container {
   .modal-content-wrapper {
     pre {
       display: inline-block;
