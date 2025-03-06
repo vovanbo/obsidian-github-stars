@@ -168,8 +168,10 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-# IntelliJ based IDEs
+# IDEs
 .idea
+.vscode
+.zed
 
 # Finder (MacOS) folder config
 .DS_Store
