@@ -1,6 +1,13 @@
 # Changelog
 
 ---
+## [0.4.2](https://github.com/vovanbo/obsidian-github-stars/compare/0.4.1..0.4.2) - 2025-03-06
+
+### Bug Fixes
+
+- Remove "Obsidian" from plugin description - ([aec7f98](https://github.com/vovanbo/obsidian-github-stars/commit/aec7f98aa1100dcb79067a2b8920f0731f543329)) - Vladimir Bolshakov
+
+---
 ## [0.4.1](https://github.com/vovanbo/obsidian-github-stars/compare/0.4.0..0.4.1) - 2025-03-06
 
 ### Bug Fixes
