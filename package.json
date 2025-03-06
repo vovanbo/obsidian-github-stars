@@ -1,6 +1,6 @@
 {
     "name": "obsidian-github-stars",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "author": {
         "name": "Vladimir Bolshakov",
         "url": "https://github.com/vovanbo"
@@ -24,6 +24,7 @@
         "neverthrow": "^8.2.0",
         "normalize-url": "^8.0.1",
         "obsidian": "latest",
+        "oxlint": "^0.15.12",
         "package-json-type": "^1.0.3",
         "resolve-tspaths": "^0.8.23",
         "sql.js": "^1.12.0",

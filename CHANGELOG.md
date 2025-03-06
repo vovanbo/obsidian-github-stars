@@ -1,6 +1,27 @@
 # Changelog
 
 ---
+## [0.4.1](https://github.com/vovanbo/obsidian-github-stars/compare/0.4.0..0.4.1) - 2025-03-06
+
+### Bug Fixes
+
+- Remove "obsidian-" prefix from plugin ID - ([8240e47](https://github.com/vovanbo/obsidian-github-stars/commit/8240e47a6f6338c5793d18afb26ae93127a4d94a)) - Vladimir Bolshakov
+
+### Documentation
+
+- Add images about GitHub tokens in README - ([b0e9253](https://github.com/vovanbo/obsidian-github-stars/commit/b0e92533fee05578d8838a5ca122b39d6762fb43)) - Vladimir Bolshakov
+- Add table of contents in README - ([806ab86](https://github.com/vovanbo/obsidian-github-stars/commit/806ab86d81c562e0a1b7bc4c61908625c3a09356)) - Vladimir Bolshakov
+- Add docs about how to use plugin - ([8e9f6ac](https://github.com/vovanbo/obsidian-github-stars/commit/8e9f6acc5cbee5477b720536c269450dbc82468b)) - Vladimir Bolshakov
+- Add video on README page - ([da2bed8](https://github.com/vovanbo/obsidian-github-stars/commit/da2bed86d2a2f0ce7de42ba39e54ca56cc7d3814)) - Vladimir Bolshakov
+- Update README - ([d7c189b](https://github.com/vovanbo/obsidian-github-stars/commit/d7c189be95d540521406d57053da141c533d7c25)) - Vladimir Bolshakov
+
+### Miscellaneous
+
+- Add Zed and VSCode folders to .gitignore - ([1d204a5](https://github.com/vovanbo/obsidian-github-stars/commit/1d204a510254654416f129d2fd9ced339b7bda84)) - Vladimir Bolshakov
+- Move biome.jsonc to biome.json - ([587aef8](https://github.com/vovanbo/obsidian-github-stars/commit/587aef89c79cdc052d5a26217551701a5ebe2dcb)) - Vladimir Bolshakov
+- Create LICENSE - ([32b28bb](https://github.com/vovanbo/obsidian-github-stars/commit/32b28bbc811364f1e134595bfeb6506555051b22)) - Vladimir Bolshakov
+
+---
 ## [0.4.0](https://github.com/vovanbo/obsidian-github-stars/compare/0.3.0..0.4.0) - 2025-03-02
 
 ### Features
