@@ -52,7 +52,7 @@ class ConfirmModal extends Modal {
     }
 
     public override onOpen(): void {
-        this.containerEl.addClass("obsidian-github-stars");
+        this.containerEl.addClass("github-stars");
         this.titleEl.setText(this.options.title);
         const contentWrapper = this.contentEl.createEl("div", {
             cls: "modal-content-wrapper",
