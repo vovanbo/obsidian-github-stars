@@ -1,6 +1,13 @@
 # Changelog
 
 ---
+## [0.4.3](https://github.com/vovanbo/obsidian-github-stars/compare/0.4.2..0.4.3) - 2025-03-06
+
+### Bug Fixes
+
+- Fix broken styles in modals - ([c8c1a73](https://github.com/vovanbo/obsidian-github-stars/commit/c8c1a735fe199f42867e48b567d31e7f7b28e3eb)) - Vladimir Bolshakov
+
+---
 ## [0.4.2](https://github.com/vovanbo/obsidian-github-stars/compare/0.4.1..0.4.2) - 2025-03-06
 
 ### Bug Fixes
