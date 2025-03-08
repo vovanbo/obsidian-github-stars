@@ -1,6 +1,21 @@
 # Changelog
 
 ---
+## [0.5.0](https://github.com/vovanbo/obsidian-github-stars/compare/0.4.3..0.5.0) - 2025-03-08
+
+### Bug Fixes
+
+- Don't use innerHTML in modals - ([5cd4e3d](https://github.com/vovanbo/obsidian-github-stars/commit/5cd4e3ddae75e6346ebe839a419a76a3d152d603)) - Vladimir Bolshakov
+
+### Features
+
+- Move unstarred file to trash instead of remove - ([7adcec9](https://github.com/vovanbo/obsidian-github-stars/commit/7adcec985c509c094251baf083b8fc8bf874a41d)) - Vladimir Bolshakov
+
+### Build
+
+- Update dependencies - ([e39bc55](https://github.com/vovanbo/obsidian-github-stars/commit/e39bc55a74bae450904efa5ca998cf4be4ec38ff)) - Vladimir Bolshakov
+
+---
 ## [0.4.3](https://github.com/vovanbo/obsidian-github-stars/compare/0.4.2..0.4.3) - 2025-03-06
 
 ### Bug Fixes
