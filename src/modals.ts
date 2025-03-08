@@ -53,11 +53,19 @@ class ConfirmModal extends Modal {
 
     public override onOpen(): void {
         this.containerEl.addClass("github-stars");
-        this.titleEl.setText(this.options.title);
+        if (typeof this.options.title === "string") {
+            this.titleEl.setText(this.options.title);
+        } else {
+            this.titleEl.appendChild(this.options.title);
+        }
         const contentWrapper = this.contentEl.createEl("div", {
             cls: "modal-content-wrapper",
         });
-        contentWrapper.innerHTML = this.options.message as string;
+        if (typeof this.options.message === "string") {
+            contentWrapper.setText(this.options.message);
+        } else {
+            contentWrapper.appendChild(this.options.message);
+        }
         const buttonsWrapper = this.contentEl.createEl("div", {
             cls: "modal-buttons-wrapper",
         });
@@ -91,23 +99,3 @@ export async function confirm(options: ConfirmOptions): Promise<boolean> {
         (resolve) => new ConfirmModal(options, resolve),
     );
 }
-
-// export class DestinationFolderConfirmationModal extends Modal {
-//     constructor(app: App, onSubmit: (result: boolean) => void) {
-//         super(app);
-//         this.setTitle("Move destination folder?");
-
-//         new Setting(this.contentEl).addButton((btn) =>
-//             btn.setButtonText("Yes").onClick(() => {
-//                 this.close();
-//                 onSubmit(true);
-//             }),
-//         );
-//         new Setting(this.contentEl).addButton((btn) =>
-//             btn.setButtonText("No").onClick(() => {
-//                 this.close();
-//                 onSubmit(false);
-//             }),
-//         );
-//     }
-// }

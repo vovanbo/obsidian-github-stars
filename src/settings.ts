@@ -2,6 +2,7 @@ import { isUndefined } from "@/helpers";
 import type GithubStarsPlugin from "@/main";
 import { confirm } from "@/modals";
 import type { Stats } from "@/storage";
+import { html, render } from "lit-html";
 import {
     type App,
     type Debouncer,
@@ -84,10 +85,15 @@ export class SettingsTab extends PluginSettingTab {
             this.plugin.settings.destinationFolder !==
                 settings.destinationFolder
         ) {
+            const message = html`
+Destination folder will be renamed from <pre>${this.plugin.settings.destinationFolder}</pre> to <pre>${settings.destinationFolder}</pre>
+`;
+            const messageFragment = document.createDocumentFragment();
+            render(message, messageFragment);
             const isRenameConfirmed = await confirm({
                 app: this.app,
                 title: "Rename destination folder?",
-                message: `Destination folder will be renamed from <pre>${this.plugin.settings.destinationFolder}</pre> to <pre>${settings.destinationFolder}</pre>`,
+                message: messageFragment,
                 okButtonText: "Yes",
                 cancelButtonText: "No",
             });
