@@ -11,6 +11,7 @@ import {
 import normalizeUrl from "normalize-url";
 import type {
     DataWriteOptions,
+    FileManager,
     TAbstractFile,
     TFile,
     TFolder,
@@ -65,8 +66,8 @@ export function getOrCreateFile(
 
 export function removeFile(
     vault: Vault,
+    fileManager: FileManager,
     path: string,
-    force?: boolean,
 ): ResultAsync<void, PluginError<Code.Vault>> {
     const file = vault.getFileByPath(path);
     if (!file) {
@@ -74,9 +75,9 @@ export function removeFile(
     }
 
     return ResultAsync.fromThrowable(
-        (f: TAbstractFile, force?: boolean) => vault.delete(f, force),
+        (f: TAbstractFile) => fileManager.trashFile(f),
         () => new PluginError(Code.Vault.FileCanNotBeRemoved),
-    )(file, force);
+    )(file);
 }
 
 export function renameFolder(

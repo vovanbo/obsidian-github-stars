@@ -422,7 +422,11 @@ export default class GithubStarsPlugin extends Plugin {
             return ResultAsync.combine(
                 removedRepos.map((repo) => {
                     const unstarredRepoFilePath = `${this.repostioriesFolder}/${repo.owner}/${repo.name}.md`;
-                    return removeFile(this.app.vault, unstarredRepoFilePath);
+                    return removeFile(
+                        this.app.vault,
+                        this.app.fileManager,
+                        unstarredRepoFilePath,
+                    );
                 }),
             );
         });
