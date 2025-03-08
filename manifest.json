@@ -1,7 +1,7 @@
 {
     "id": "github-stars",
     "name": "GitHub stars",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "minAppVersion": "1.0.0",
     "description": "Fetch your GitHub stars and create documents in your vault.",
     "author": "Vladimir Bolshakov",

@@ -1,6 +1,13 @@
 # Changelog
 
 ---
+## [0.5.1](https://github.com/vovanbo/obsidian-github-stars/compare/0.5.0..0.5.1) - 2025-03-08
+
+### Build
+
+- Remove console logs in production build - ([53522e4](https://github.com/vovanbo/obsidian-github-stars/commit/53522e440992666d6403b28d4160bfd7aa01b28c)) - Vladimir Bolshakov
+
+---
 ## [0.5.0](https://github.com/vovanbo/obsidian-github-stars/compare/0.4.3..0.5.0) - 2025-03-08
 
 ### Bug Fixes
