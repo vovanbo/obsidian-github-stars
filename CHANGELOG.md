@@ -1,6 +1,13 @@
 # Changelog
 
 ---
+## [0.5.3](https://github.com/vovanbo/obsidian-github-stars/compare/0.5.2..0.5.3) - 2025-04-07
+
+### Build
+
+- Fix bump of min app version to 1.5.7 - ([07b2af7](https://github.com/vovanbo/obsidian-github-stars/commit/07b2af7ef8134c229aba6dd5aa91bd18c89a97f0)) - Vladimir Bolshakov
+
+---
 ## [0.5.2](https://github.com/vovanbo/obsidian-github-stars/compare/0.5.1..0.5.2) - 2025-04-07
 
 ### Documentation
