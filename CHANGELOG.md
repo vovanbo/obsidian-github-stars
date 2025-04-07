@@ -1,6 +1,21 @@
 # Changelog
 
 ---
+## [0.5.2](https://github.com/vovanbo/obsidian-github-stars/compare/0.5.1..0.5.2) - 2025-04-07
+
+### Documentation
+
+- Update README.md - ([0ca9029](https://github.com/vovanbo/obsidian-github-stars/commit/0ca9029992129c975c5e446227671756dab71fa1)) - Vladimir Bolshakov
+
+### Miscellaneous
+
+- Remove funding URL and bump min app version to 1.5.7 - ([6266ed4](https://github.com/vovanbo/obsidian-github-stars/commit/6266ed438695cb2c0aa72d0874dde63ea186b3f5)) - Vladimir Bolshakov
+
+### Build
+
+- Update dependencies - ([86977cd](https://github.com/vovanbo/obsidian-github-stars/commit/86977cd5fdb6f81dc29e947ae2f6418e122f7e3c)) - Vladimir Bolshakov
+
+---
 ## [0.5.1](https://github.com/vovanbo/obsidian-github-stars/compare/0.5.0..0.5.1) - 2025-03-08
 
 ### Build
