@@ -5,7 +5,7 @@
         "name": "Vladimir Bolshakov",
         "url": "https://github.com/vovanbo"
     },
-    "obsidianMinAppVersion": "1.0.0",
+    "obsidianMinAppVersion": "1.5.7",
     "devDependencies": {
         "@biomejs/biome": "^1.9.4",
         "@octokit/core": "^6.1.4",
