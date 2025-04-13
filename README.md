@@ -72,7 +72,7 @@ To generate a fine grained access token, follow these steps:
 ### Installation
 
 You have two options to install this plugin:
-1. Install this plugin from community plugin list in Obsidian. NB only after [this PR](https://github.com/obsidianmd/obsidian-releases/pull/5602) will be merged.
+1. ~~Install this plugin from community plugin list in Obsidian. NB only after [this PR](https://github.com/obsidianmd/obsidian-releases/pull/5602) will be merged.~~. This plugin will be never in community plugin list.
 2. Use [BRAT][BRAT] plugin to use this plugin version directly from [GitHub](https://github.com/vovanbo/obsidian-github-stars/releases).
 
 ### Usage
